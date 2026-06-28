@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LogSight — Log Intelligence for Trading Firms</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/reset.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/reveal.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/theme/black.min.css" />
+  <style>
+    :root {
+      --accent: #38bdf8;
+      --accent2: #818cf8;
+      --green: #34d399;
+      --red: #f87171;
+      --yellow: #fbbf24;
+    }
+
+    .reveal {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+
+    .reveal h1, .reveal h2, .reveal h3 {
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .reveal h1 { color: var(--accent); font-size: 2.2em; }
+    .reveal h2 { color: #e2e8f0; font-size: 1.5em; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    .reveal h3 { color: var(--accent); font-size: 1.1em; }
+
+    .reveal section { text-align: left; }
+    .reveal .title-slide { text-align: center; }
+
+    .tag {
+      display: inline-block;
+      background: rgba(56,189,248,0.15);
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      border-radius: 20px;
+      padding: 3px 14px;
+      font-size: 0.55em;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+
+    .tag.green { background: rgba(52,211,153,0.15); border-color: var(--green); color: var(--green); }
+    .tag.purple { background: rgba(129,140,248,0.15); border-color: var(--accent2); color: var(--accent2); }
+    .tag.yellow { background: rgba(251,191,36,0.15); border-color: var(--yellow); color: var(--yellow); }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2em;
+    }
+
+    .three-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 1.2em;
+    }
+
+    .card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 1.2em;
+    }
+
+    .card.accent { border-color: var(--accent); }
+    .card.green  { border-color: var(--green); }
+    .card.purple { border-color: var(--accent2); }
+
+    .reveal ul { margin-left: 1em; }
+    .reveal li { margin-bottom: 0.4em; font-size: 0.85em; line-height: 1.5; }
+
+    .reveal code {
+      background: rgba(56,189,248,0.1);
+      border: 1px solid rgba(56,189,248,0.2);
+      border-radius: 4px;
+      padding: 0.1em 0.4em;
+      color: var(--accent);
+      font-size: 0.85em;
+    }
+
+    .reveal pre {
+      background: #0f172a !important;
+      border: 1px solid rgba(56,189,248,0.2);
+      border-radius: 8px;
+      padding: 1em;
+      font-size: 0.7em;
+      line-height: 1.6;
+      box-shadow: none;
+      width: 100%;
+    }
+
+    .reveal pre code {
+      background: none;
+      border: none;
+      color: #94a3b8;
+      padding: 0;
+    }
+
+    .highlight { color: var(--accent); font-weight: 600; }
+    .green-text { color: var(--green); }
+    .red-text   { color: var(--red); }
+    .yellow-text { color: var(--yellow); }
+
+    .metric {
+      text-align: center;
+      padding: 1em;
+    }
+    .metric .number {
+      font-size: 2.5em;
+      font-weight: 800;
+      color: var(--accent);
+      display: block;
+    }
+    .metric .label {
+      font-size: 0.7em;
+      color: #94a3b8;
+    }
+
+    .chat-bubble {
+      background: rgba(56,189,248,0.1);
+      border: 1px solid rgba(56,189,248,0.3);
+      border-radius: 12px;
+      padding: 0.8em 1.2em;
+      margin-bottom: 0.6em;
+      font-size: 0.8em;
+    }
+    .chat-bubble.assistant {
+      background: rgba(129,140,248,0.1);
+      border-color: rgba(129,140,248,0.3);
+    }
+    .chat-bubble .role {
+      font-size: 0.7em;
+      color: #64748b;
+      margin-bottom: 0.3em;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .sse-event {
+      display: flex;
+      align-items: center;
+      gap: 0.6em;
+      margin-bottom: 0.35em;
+      font-size: 0.72em;
+    }
+    .sse-type {
+      background: rgba(56,189,248,0.15);
+      border: 1px solid rgba(56,189,248,0.3);
+      border-radius: 4px;
+      padding: 2px 8px;
+      color: var(--accent);
+      font-family: monospace;
+      white-space: nowrap;
+      min-width: 90px;
+      text-align: center;
+    }
+    .sse-desc { color: #94a3b8; }
+
+    .arch-box {
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px;
+      padding: 0.6em 1em;
+      text-align: center;
+      font-size: 0.7em;
+    }
+    .arch-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent);
+      font-size: 1.2em;
+      padding: 0.2em;
+    }
+
+    .phase-badge {
+      display: inline-block;
+      background: var(--green);
+      color: #000;
+      border-radius: 20px;
+      padding: 2px 10px;
+      font-size: 0.55em;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      vertical-align: middle;
+      margin-left: 6px;
+    }
+
+    .progress-row {
+      display: flex;
+      align-items: center;
+      gap: 0.6em;
+      margin-bottom: 0.5em;
+      font-size: 0.8em;
+    }
+    .progress-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--green);
+      flex-shrink: 0;
+    }
+    .progress-dot.planned { background: #475569; }
+
+    .footer {
+      position: absolute;
+      bottom: 1em;
+      right: 1.5em;
+      font-size: 0.5em;
+      color: #475569;
+    }
+
+    .reveal .slides section .fragment.visible { opacity: 1; }
+  </style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ═══════════════════════════════════════════════════════════ TITLE -->
+<section class="title-slide">
+  <div style="margin-bottom:1em">
+    <span style="font-size:3em">🔍</span>
+  </div>
+  <h1 style="font-size:2.8em; margin-bottom:0.2em">LogSight</h1>
+  <p style="color:#94a3b8; font-size:1em; margin-bottom:1.5em">
+    Log Intelligence for Trading Firms
+  </p>
+  <div style="display:flex; justify-content:center; gap:0.8em; flex-wrap:wrap">
+    <span class="tag">Plain English Queries</span>
+    <span class="tag green">AI-Powered Analysis</span>
+    <span class="tag purple">Real-Time Streaming</span>
+  </div>
+  <div style="margin-top:2.5em; color:#475569; font-size:0.55em">
+    Use arrow keys or swipe to navigate · Press F for fullscreen
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ PROBLEM -->
+<section>
+  <h2>The Problem</h2>
+  <p style="color:#94a3b8; font-size:0.85em; margin-bottom:1.2em">
+    When something goes wrong in trading, every second counts.
+  </p>
+  <div class="two-col">
+    <div>
+      <h3>Today's workflow</h3>
+      <ul>
+        <li>SSH into server1, grep logs manually</li>
+        <li>SSH into server2, repeat</li>
+        <li>Ask 4 different people "where are the curve builder logs?"</li>
+        <li>Realise you need server3 too — repeat</li>
+        <li class="red-text">Answer arrives 20 minutes later</li>
+      </ul>
+    </div>
+    <div>
+      <h3>The pain points</h3>
+      <ul>
+        <li>Logs spread across dozens of machines</li>
+        <li>No single view of the fleet</li>
+        <li>Tribal knowledge about log locations</li>
+        <li>Manual pattern matching in noisy output</li>
+        <li class="red-text">High-stakes decisions delayed by log hunting</li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer">LogSight — Confidential</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ SOLUTION -->
+<section>
+  <h2>The Solution</h2>
+  <p style="color:#94a3b8; font-size:0.85em; margin-bottom:1em">Ask a question. Get an answer.</p>
+
+  <div class="chat-bubble">
+    <div class="role">Trader</div>
+    Is curve building complete for today?
+  </div>
+  <div style="text-align:center; color:var(--accent); font-size:0.8em; margin: 0.3em 0">
+    ↓ &nbsp; LogSight fans out to all registered machines in parallel &nbsp; ↓
+  </div>
+  <div class="chat-bubble assistant">
+    <div class="role">LogSight</div>
+    <strong class="green-text">✓ Curve building completed at 14:23:07</strong> on <code>server1.stirt.internal</code>.<br/>
+    <span style="color:#94a3b8; font-size:0.9em">
+      Found in <code>/opt/app/logs/curve-builder.log</code> — 3 matching lines.<br/>
+      ⚠️ <code>server2.stirt.internal</code> sidecar is offline — results may be incomplete.
+    </span>
+  </div>
+  <div style="display:flex; gap:0.8em; margin-top:0.6em; font-size:0.65em; color:#64748b">
+    <span>📄 CurveBuilder · server1 · 3 lines matched</span>
+    <span>·</span>
+    <span>💬 1,240 tokens · ~$0.004</span>
+    <span>·</span>
+    <span>👍 👎</span>
+  </div>
+  <div class="footer">LogSight — Confidential</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ ARCHITECTURE -->
+<section>
+  <h2>Architecture</h2>
+  <div style="display:grid; grid-template-columns: 2fr 0.3fr 1.5fr 0.3fr 1.5fr; align-items:center; gap:0.3em; margin-top:0.5em">
+    <div class="arch-box" style="border-color:var(--accent2)">
+      <div style="font-size:1.5em">🖥️</div>
+      <strong style="color:var(--accent2)">React UI</strong><br/>
+      <span style="color:#64748b">:5173 (dev)<br/>Chat · Admin</span>
+    </div>
+    <div class="arch-arrow">→</div>
+    <div class="arch-box" style="border-color:var(--accent)">
+      <div style="font-size:1.5em">⚡</div>
+      <strong style="color:var(--accent)">FastAPI Server</strong><br/>
+      <span style="color:#64748b">:8080<br/>SSE · Claude · Postgres</span>
+    </div>
+    <div class="arch-arrow">→</div>
+    <div class="arch-box" style="border-color:var(--green)">
+      <div style="font-size:1.5em">🦀</div>
+      <strong style="color:var(--green)">Rust Sidecars</strong><br/>
+      <span style="color:#64748b">:9000 per machine<br/>Read-only · Static binary</span>
+    </div>
+  </div>
+  <div style="margin-top:1.2em">
+    <div class="three-col">
+      <div class="card accent" style="font-size:0.72em">
+        <strong>Agentic Loop</strong><br/>
+        <span style="color:#94a3b8">Claude tool-use + extended thinking. Decides which sidecars to query, what keywords to search, whether to ask for clarification.</span>
+      </div>
+      <div class="card green" style="font-size:0.72em">
+        <strong>Fleet Registry</strong><br/>
+        <span style="color:#94a3b8">Namespace → Machine → Sidecar topology. Sidecars self-register and send heartbeats every 30s. Dead sidecars flagged automatically.</span>
+      </div>
+      <div class="card purple" style="font-size:0.72em">
+        <strong>SSE Streaming</strong><br/>
+        <span style="color:#94a3b8">Typed server-sent events: thinking → tool_call → answer → sources → usage → done. Trader sees progress in real time.</span>
+      </div>
+    </div>
+  </div>
+  <div class="footer">LogSight — Confidential</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ AGENTIC LOOP -->
+<section>
+  <h2>How the Agentic Loop Works</h2>
+  <div class="two-col" style="align-items:start">
+    <div>
+      <div class="sse-event"><span class="sse-type">thinking</span><span class="sse-desc">Claude reasons about the query (extended thinking)</span></div>
+      <div class="sse-event"><span class="sse-type">tool_call</span><span class="sse-desc"><code>list_sidecars(process_name="CurveBuilder")</code></span></div>
+      <div class="sse-event"><span class="sse-type" style="color:#94a3b8;border-color:#475569">→ DB</span><span class="sse-desc" style="color:#475569">Query alive sidecars with CurveBuilder</span></div>
+      <div class="sse-event"><span class="sse-type">tool_call</span><span class="sse-desc"><code>search_logs(sidecar_id, keywords=[...])</code></span></div>
+      <div class="sse-event"><span class="sse-type" style="color:#94a3b8;border-color:#475569">→ sidecar</span><span class="sse-desc" style="color:#475569">POST /search — parallel httpx, 10s timeout</span></div>
+      <div class="sse-event"><span class="sse-type" style="color:var(--yellow);border-color:var(--yellow)">clarify?</span><span class="sse-desc">Agent can ask trader for clarification with optional buttons</span></div>
+      <div class="sse-event"><span class="sse-type" style="color:var(--accent2);border-color:var(--accent2)">chart?</span><span class="sse-desc"><code>render_chart()</code> → recharts bar/line/pie in UI</span></div>
+      <div class="sse-event"><span class="sse-type" style="color:var(--green);border-color:var(--green)">answer</span><span class="sse-desc">Final markdown answer rendered in UI</span></div>
+      <div class="sse-event"><span class="sse-type" style="color:var(--green);border-color:var(--green)">sources</span><span class="sse-desc">Matched files with line counts</span></div>
+      <div class="sse-event"><span class="sse-type" style="color:var(--green);border-color:var(--green)">done</span><span class="sse-desc">Token usage · cost · conversation saved</span></div>
+    </div>
+    <div>
+      <h3 style="margin-bottom:0.6em">Claude's toolbox</h3>
+      <div class="card" style="font-size:0.7em; margin-bottom:0.6em">
+        <code>list_sidecars</code><br/>
+        <span style="color:#64748b">Find alive machines for a process or hostname</span>
+      </div>
+      <div class="card" style="font-size:0.7em; margin-bottom:0.6em">
+        <code>search_logs</code><br/>
+        <span style="color:#64748b">Keyword grep with time window. Accepts explicit paths, bypasses registry if needed</span>
+      </div>
+      <div class="card" style="font-size:0.7em; margin-bottom:0.6em">
+        <code>render_chart</code><br/>
+        <span style="color:#64748b">Bar / line / pie — Claude derives data from log lines</span>
+      </div>
+      <div class="card" style="font-size:0.7em">
+        <code>ask_user</code><br/>
+        <span style="color:#64748b">Pause and clarify. Optional button choices for ambiguous queries</span>
+      </div>
+    </div>
+  </div>
+  <div class="footer">LogSight — Confidential</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ FEATURES -->
+<section>
+  <h2>Key Features <span class="phase-badge">Phase 3</span></h2>
+  <div class="three-col">
+    <div class="card accent">
+      <h3>📊 Charts</h3>
+      <p style="font-size:0.7em; color:#94a3b8">Claude derives data from log lines and renders bar, line, or pie charts automatically when the answer is comparative or time-series.</p>
+    </div>
+    <div class="card green">
+      <h3>🗂 Source Attribution</h3>
+      <p style="font-size:0.7em; color:#94a3b8">Every answer shows which log files matched, on which machines, with line counts. Click to expand the file list.</p>
+    </div>
+    <div class="card purple">
+      <h3>💬 Rich Answers</h3>
+      <p style="font-size:0.7em; color:#94a3b8">Markdown rendering — tables, code blocks, bold. Claude returns structured summaries, not raw grep output.</p>
+    </div>
+    <div class="card accent">
+      <h3>⚠️ Anomaly Detection</h3>
+      <p style="font-size:0.7em; color:#94a3b8">If logs contain SIGTERM, crashed, or shutdown, Claude flags it prominently at the top of the answer — even when not asked.</p>
+    </div>
+    <div class="card green">
+      <h3>🔍 Arbitrary Paths</h3>
+      <p style="font-size:0.7em; color:#94a3b8">"Search /var/log/custom.log on server1" — agent routes to the right sidecar and passes the path directly. No pre-registration needed.</p>
+    </div>
+    <div class="card purple">
+      <h3>👍 Feedback Loop</h3>
+      <p style="font-size:0.7em; color:#94a3b8">Thumbs up/down with optional comment on every answer. Persisted in DB for monitoring answer quality over time.</p>
+    </div>
+  </div>
+  <div class="footer">LogSight — Confidential</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ MORE FEATURES -->
+<section>
+  <h2>More Features</h2>
+  <div class="two-col">
+    <div>
+      <h3 style="margin-bottom:0.6em">Multi-turn conversations</h3>
+      <ul>
+        <li>Full conversation history sent to Claude on every follow-up</li>
+        <li>Sidebar shows all past conversations</li>
+        <li>"What time did the error happen?" → Claude remembers context</li>
+      </ul>
+      <h3 style="margin-top:1em; margin-bottom:0.6em">Token & cost visibility</h3>
+      <ul>
+        <li>Every answer shows <code>N tokens · ~$X.XXX</code></li>
+        <li>Usage persisted per message for audit</li>
+        <li>Extended thinking billed separately</li>
+      </ul>
+    </div>
+    <div>
+      <h3 style="margin-bottom:0.6em">Fleet health at a glance</h3>
+      <ul>
+        <li>Admin UI shows every namespace, machine, and sidecar</li>
+        <li>Sidecar status: <span class="green-text">alive</span> / <span class="red-text">dead</span> — updated every 30s</li>
+        <li>Assign processes + log paths without redeploying</li>
+      </ul>
+      <h3 style="margin-top:1em; margin-bottom:0.6em">Export & share</h3>
+      <ul>
+        <li>Download any answer as <code>.md</code></li>
+        <li>Export full conversation as a single markdown file</li>
+        <li>Useful for post-mortems and incident reports</li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer">LogSight — Confidential</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ TECH STACK -->
+<section>
+  <h2>Tech Stack</h2>
+  <div class="three-col">
+    <div class="card" style="border-color:var(--yellow)">
+      <h3 style="color:var(--yellow)">🦀 Sidecar</h3>
+      <ul style="font-size:0.7em">
+        <li>Rust · tokio · axum 0.7</li>
+        <li>Single static binary — zero deps on target machine</li>
+        <li>Glob expansion · time-window grep</li>
+        <li>Read-only filesystem access</li>
+        <li>~4 MB binary, cross-compiled for Linux musl</li>
+      </ul>
+    </div>
+    <div class="card" style="border-color:var(--accent)">
+      <h3 style="color:var(--accent)">⚡ Server</h3>
+      <ul style="font-size:0.7em">
+        <li>Python 3.11+ · FastAPI 0.115</li>
+        <li>Anthropic Claude (Sonnet 4.6)</li>
+        <li>SQLAlchemy 2.0 async · asyncpg · Alembic</li>
+        <li>PostgreSQL · httpx fanout</li>
+        <li>uv for dependency management</li>
+      </ul>
+    </div>
+    <div class="card" style="border-color:var(--accent2)">
+      <h3 style="color:var(--accent2)">🎨 UI</h3>
+      <ul style="font-size:0.7em">
+        <li>React 18 · Vite · TypeScript</li>
+        <li>Tailwind CSS · Zustand</li>
+        <li>react-markdown · remark-gfm</li>
+        <li>recharts (bar · line · pie)</li>
+        <li>Vitest · Testing Library</li>
+      </ul>
+    </div>
+  </div>
+  <div style="margin-top:1.2em; display:flex; justify-content:center; gap:3em">
+    <div class="metric">
+      <span class="number">171</span>
+      <span class="label">Python tests</span>
+    </div>
+    <div class="metric">
+      <span class="number">28</span>
+      <span class="label">Rust tests</span>
+    </div>
+    <div class="metric">
+      <span class="number">42</span>
+      <span class="label">Vitest UI tests</span>
+    </div>
+    <div class="metric">
+      <span class="number">100%</span>
+      <span class="label">passing</span>
+    </div>
+  </div>
+  <div class="footer">LogSight — Confidential</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ SECURITY -->
+<section>
+  <h2>Security &amp; Reliability</h2>
+  <div class="two-col">
+    <div>
+      <h3>Security</h3>
+      <ul>
+        <li><strong>Read-only sidecars</strong> — can only read files where they have filesystem permission</li>
+        <li><strong>No shell execution</strong> — pure file reads, no remote code execution surface</li>
+        <li><strong>Secrets never in config files</strong> — API keys only in <code>.env</code> (gitignored)</li>
+        <li><strong>Systemd hardening</strong> — <code>NoNewPrivileges</code>, <code>PrivateTmp</code>, <code>ProtectSystem=strict</code></li>
+        <li>Phase 4: auth tokens between server ↔ sidecar + TLS</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Reliability</h3>
+      <ul>
+        <li><strong>Graceful degradation</strong> — if a sidecar is unreachable, the answer notes it and continues with available data</li>
+        <li><strong>Dead sidecar detection</strong> — background task marks sidecars dead if no heartbeat in 60s</li>
+        <li><strong>10s per-sidecar timeout</strong> — slow machines don't block the whole query</li>
+        <li><strong>Conversation persistence</strong> — full history in Postgres, survives server restarts</li>
+        <li><strong>Parallel fanout</strong> — all sidecars queried concurrently via asyncio</li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer">LogSight — Confidential</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ ROADMAP -->
+<section>
+  <h2>Roadmap</h2>
+  <div style="margin-top:0.5em">
+    <div style="margin-bottom:1.2em">
+      <h3>✅ Phase 1 &amp; 2 — Complete</h3>
+      <div style="columns: 2; font-size:0.75em; color:#94a3b8">
+        <div class="progress-row"><span class="progress-dot"></span>Rust sidecar with glob search</div>
+        <div class="progress-row"><span class="progress-dot"></span>Process registry + admin UI</div>
+        <div class="progress-row"><span class="progress-dot"></span>Claude routing + summarization</div>
+        <div class="progress-row"><span class="progress-dot"></span>Fleet topology (namespace → machine → sidecar)</div>
+        <div class="progress-row"><span class="progress-dot"></span>Agentic loop with tool-use + extended thinking</div>
+        <div class="progress-row"><span class="progress-dot"></span>SSE streaming chat + conversation persistence</div>
+        <div class="progress-row"><span class="progress-dot"></span>React UI with TypeScript + Tailwind</div>
+        <div class="progress-row"><span class="progress-dot"></span>Alembic migrations + Docker Compose</div>
+      </div>
+    </div>
+    <div style="margin-bottom:1.2em">
+      <h3>✅ Phase 3 — Complete</h3>
+      <div style="columns: 2; font-size:0.75em; color:#94a3b8">
+        <div class="progress-row"><span class="progress-dot"></span>Markdown + chart rendering</div>
+        <div class="progress-row"><span class="progress-dot"></span>Token tracking + cost display</div>
+        <div class="progress-row"><span class="progress-dot"></span>Feedback mechanism (👍👎)</div>
+        <div class="progress-row"><span class="progress-dot"></span>Source file attribution</div>
+        <div class="progress-row"><span class="progress-dot"></span>Arbitrary log path search</div>
+        <div class="progress-row"><span class="progress-dot"></span>Anomaly detection (SIGTERM/crash)</div>
+        <div class="progress-row"><span class="progress-dot"></span>Export to Markdown</div>
+        <div class="progress-row"><span class="progress-dot"></span>Integration test suite</div>
+      </div>
+    </div>
+    <div>
+      <h3>🔜 Phase 4 — Planned</h3>
+      <div style="columns: 2; font-size:0.75em; color:#64748b">
+        <div class="progress-row"><span class="progress-dot planned"></span>Auth tokens between server ↔ sidecar</div>
+        <div class="progress-row"><span class="progress-dot planned"></span>TLS for sidecar endpoints</div>
+        <div class="progress-row"><span class="progress-dot planned"></span>Elasticsearch integration</div>
+        <div class="progress-row"><span class="progress-dot planned"></span>Windows Event Log support</div>
+        <div class="progress-row"><span class="progress-dot planned"></span>Playwright end-to-end tests</div>
+        <div class="progress-row"><span class="progress-dot planned"></span>Role-based access control</div>
+      </div>
+    </div>
+  </div>
+  <div class="footer">LogSight — Confidential</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ CLOSING -->
+<section class="title-slide">
+  <div style="font-size:3em; margin-bottom:0.5em">🔍</div>
+  <h1 style="font-size:2.4em">LogSight</h1>
+  <p style="color:#94a3b8; margin-bottom:2em; font-size:0.9em">
+    From SSH + grep to a plain English question in seconds.
+  </p>
+  <div class="three-col" style="text-align:center; margin-bottom:2em">
+    <div>
+      <div style="font-size:1.8em; margin-bottom:0.2em">⚡</div>
+      <div style="font-size:0.7em; color:#94a3b8">Real-time answers<br/>via SSE streaming</div>
+    </div>
+    <div>
+      <div style="font-size:1.8em; margin-bottom:0.2em">🌐</div>
+      <div style="font-size:0.7em; color:#94a3b8">Distributed fleet<br/>one query, all machines</div>
+    </div>
+    <div>
+      <div style="font-size:1.8em; margin-bottom:0.2em">🤖</div>
+      <div style="font-size:0.7em; color:#94a3b8">Claude-powered<br/>agentic reasoning</div>
+    </div>
+  </div>
+  <div style="color:#475569; font-size:0.6em">
+    github.com/ramakanaveen/logsight
+  </div>
+</section>
+
+</div><!-- /slides -->
+</div><!-- /reveal -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/reveal.min.js"></script>
+<script>
+  Reveal.initialize({
+    hash: true,
+    transition: 'slide',
+    transitionSpeed: 'fast',
+    backgroundTransition: 'fade',
+    controls: true,
+    progress: true,
+    center: true,
+    slideNumber: 'c/t',
+    width: 1200,
+    height: 700,
+    margin: 0.04,
+  });
+</script>
+</body>
+</html>

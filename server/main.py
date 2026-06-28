@@ -4,6 +4,7 @@ from datetime import datetime, timezone, timedelta
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import update
 
 from app.config import settings
@@ -52,6 +53,8 @@ app.include_router(processes_router)
 app.include_router(topology_router)
 app.include_router(conversations_router)
 app.include_router(feedback_router)
+
+app.mount("/presentation", StaticFiles(directory="presentation", html=True), name="presentation")
 
 
 @app.get("/v1/health")
