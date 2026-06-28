@@ -1,4 +1,5 @@
 """Tests for the chat endpoints (non-streaming POST /v1/chat)."""
+import json
 import pytest
 from unittest.mock import patch
 
@@ -73,3 +74,59 @@ async def test_chat_agent_exception_returns_error_event(client, created_process)
         )
     assert resp.status_code == 200
     assert "error" in resp.text
+
+
+async def test_chat_stream_persists_chart_and_sources_in_metadata(client, created_process):
+    """Chart spec and sources emitted during streaming are saved to message metadata."""
+    chart_spec = {
+        "chart_type": "bar",
+        "title": "Errors by Hour",
+        "labels": ["09:00", "10:00"],
+        "datasets": [{"label": "errors", "data": [3, 7]}],
+    }
+
+    async def _fake_with_chart(*, question, process_hint, history, process_definitions, db, emit):
+        await emit("answer", {"text": "Here is a chart of errors."})
+        await emit("chart", chart_spec)
+        await emit("usage", {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15, "cost_usd": 0.0001})
+        return (
+            "Here is a chart of errors.",
+            [],
+            [
+                {
+                    "process_name": "CurveBuilder",
+                    "machine_host": "srv1",
+                    "files_searched": 1,
+                    "lines_matched": 2,
+                    "matched_files": ["/opt/logs/curve.log"],
+                }
+            ],
+        )
+
+    with patch("app.routes.chat.run_agent", side_effect=_fake_with_chart):
+        resp = await client.post("/v1/chat/stream", json={"question": "Show chart"})
+    assert resp.status_code == 200
+
+    # Extract conversation_id from the 'done' SSE event
+    conv_id = None
+    for line in resp.text.splitlines():
+        if line.startswith("data:"):
+            evt = json.loads(line[5:])
+            if evt["type"] == "done":
+                conv_id = evt["data"]["conversation_id"]
+    assert conv_id is not None, "Expected a 'done' event with conversation_id"
+
+    # Fetch messages and verify metadata was persisted
+    msgs_resp = await client.get(f"/v1/conversations/{conv_id}/messages")
+    assert msgs_resp.status_code == 200
+    msgs = msgs_resp.json()
+    asst = next((m for m in msgs if m["role"] == "assistant"), None)
+    assert asst is not None
+
+    metadata = asst.get("metadata") or {}
+    assert metadata.get("chart") == chart_spec, "Chart spec not persisted in metadata"
+    assert len(metadata.get("sources", [])) == 1
+    assert metadata["sources"][0]["process"] == "CurveBuilder"
+    assert metadata["sources"][0]["machine"] == "srv1"
+    assert "/opt/logs/curve.log" in metadata["sources"][0]["matched_files"]
+    assert metadata.get("usage", {}).get("total_tokens") == 15

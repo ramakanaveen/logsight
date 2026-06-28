@@ -49,12 +49,22 @@ async def _save_turn(
     final_messages: list[dict],
     db: AsyncSession,
     usage: dict | None = None,
+    chart: dict | None = None,
+    sources: list[dict] | None = None,
 ) -> uuid.UUID:
     """Save user + assistant messages and return the assistant message ID."""
     if not conv.title:
         conv.title = question[:80]
 
     assistant_id = uuid.uuid4()
+    metadata: dict = {}
+    if usage:
+        metadata["usage"] = usage
+    if chart:
+        metadata["chart"] = chart
+    if sources:
+        metadata["sources"] = sources
+
     user_msg = Message(
         id=uuid.uuid4(),
         conversation_id=conv.id,
@@ -67,7 +77,7 @@ async def _save_turn(
         conversation_id=conv.id,
         role="assistant",
         content=answer,
-        metadata_={"usage": usage} if usage else {},
+        metadata_=metadata,
     )
     db.add(user_msg)
     db.add(assistant_msg)
@@ -95,11 +105,14 @@ async def _stream_agent(
 
     collected: list[str] = []
     collected_usage: dict | None = None
+    collected_chart: dict | None = None
 
     async def emit(event_type: str, data: object) -> None:
-        nonlocal collected_usage
+        nonlocal collected_usage, collected_chart
         if event_type == "usage":
             collected_usage = data  # type: ignore[assignment]
+        elif event_type == "chart":
+            collected_chart = data  # type: ignore[assignment]
         collected.append(_sse(event_type, data))
 
     events: list[str] = []
@@ -114,7 +127,6 @@ async def _stream_agent(
             emit=emit,
         )
         events = collected
-        assistant_id = await _save_turn(conv, body.question, answer, final_messages, db, usage=collected_usage)
         # Format sources for the UI (strip internal _machine_host key)
         ui_sources = [
             {
@@ -126,6 +138,10 @@ async def _stream_agent(
             }
             for s in sources
         ]
+        assistant_id = await _save_turn(
+            conv, body.question, answer, final_messages, db,
+            usage=collected_usage, chart=collected_chart, sources=ui_sources or None,
+        )
         events.append(_sse("sources", ui_sources))
         events.append(_sse("done", {"conversation_id": str(conv.id), "message_id": str(assistant_id)}))
     except ClarifyPause as cp:

@@ -9,6 +9,12 @@ use tokio::time::sleep;
 struct RegisterRequest {
     machine_host: String,
     port: u16,
+    version: &'static str,
+}
+
+#[derive(Serialize)]
+struct HeartbeatRequest {
+    version: &'static str,
 }
 
 #[derive(Deserialize)]
@@ -41,6 +47,7 @@ async fn register(client: &Client, agent_url: &str, machine_host: &str, port: u1
     let body = RegisterRequest {
         machine_host: machine_host.to_string(),
         port,
+        version: env!("CARGO_PKG_VERSION"),
     };
 
     loop {
@@ -67,7 +74,8 @@ async fn heartbeat_loop(client: &Client, agent_url: &str, sidecar_id: &str, inte
     let url = format!("{agent_url}/v1/sidecars/{sidecar_id}/heartbeat");
     loop {
         sleep(Duration::from_secs(interval_secs)).await;
-        match client.post(&url).send().await {
+        let payload = HeartbeatRequest { version: env!("CARGO_PKG_VERSION") };
+        match client.post(&url).json(&payload).send().await {
             Ok(resp) if resp.status().is_success() => {
                 tracing::debug!("heartbeat sent");
             }

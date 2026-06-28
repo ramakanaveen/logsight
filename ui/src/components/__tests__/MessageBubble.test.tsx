@@ -43,7 +43,7 @@ describe('MessageBubble', () => {
     const turn = makeTurn({ loading: true })
     render(<MessageBubble turn={turn} onClarify={() => {}} />)
     // Three animated dots
-    const dots = screen.getAllByText('●')
+    const dots = document.querySelectorAll('.dot-1, .dot-2, .dot-3')
     expect(dots.length).toBe(3)
   })
 
@@ -59,7 +59,7 @@ describe('MessageBubble', () => {
   it('renders download button when answer is present', () => {
     const turn = makeTurn({ answerText: 'Curve is done.' })
     render(<MessageBubble turn={turn} onClarify={() => {}} />)
-    expect(screen.getByTitle('Download analysis as Markdown')).toBeInTheDocument()
+    expect(screen.getByTitle('Download as Markdown')).toBeInTheDocument()
   })
 
   it('renders error text when error is present', () => {

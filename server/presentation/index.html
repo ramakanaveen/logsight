@@ -450,10 +450,29 @@
     <div class="arch-node" style="border-color:rgba(74,222,128,0.35)">
       <div class="icon">🦀</div>
       <div class="name" style="color:var(--green)">Rust Sidecars</div>
-      <div class="sub">One per machine<br/>:9000 · read-only</div>
+      <div class="sub">Physical · ECS · VM<br/>:9000 · read-only</div>
+      <div style="margin-top:0.4em;font-size:0.6em;color:var(--amber);font-weight:700;letter-spacing:0.08em">🦀 Built in Rust</div>
     </div>
   </div>
-  <div class="three-col" style="margin-top:1.2em">
+  <div style="margin-top:0.9em; display:flex; align-items:center; gap:0.6em; flex-wrap:wrap">
+    <span style="font-size:clamp(0.62rem,1vw,0.72rem); color:var(--muted); text-transform:uppercase; letter-spacing:0.12em; font-weight:700">Deploys on</span>
+    <span style="font-size:clamp(0.6rem,0.9vw,0.7rem); color:var(--dim); font-weight:600; background:rgba(74,222,128,0.08); border:1px solid rgba(74,222,128,0.2); border-radius:20px; padding:0.2em 0.7em">🐧 Linux</span>
+    <span class="tag tag-green">🖥️ Physical Machines</span>
+    <span class="tag tag-orange">📦 ECS Containers</span>
+    <span class="tag tag-amber">☁️ VMs &amp; Cloud Hosts</span>
+    <span class="tag tag-amber">🏢 Co-Lo Servers<sup style="color:var(--orange);font-size:0.8em">*</sup></span>
+    <span style="display:inline-flex;align-items:center;gap:0.3em;background:rgba(88,88,100,0.12);border:1px dashed rgba(88,88,100,0.3);border-radius:20px;padding:0.25em 0.9em;font-size:clamp(0.62rem,1vw,0.75rem);font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--dim)">🪟 Windows <span style="color:var(--orange);font-size:0.9em">· Phase 3</span></span>
+  </div>
+  <div style="margin-top:0.5em; display:flex; align-items:center; gap:0.6em; flex-wrap:wrap">
+    <span style="font-size:clamp(0.62rem,1vw,0.72rem); color:var(--muted); text-transform:uppercase; letter-spacing:0.12em; font-weight:700">Design principle</span>
+    <span class="tag tag-green">✓ No log caching</span>
+    <span class="tag tag-green">✓ No vector embeddings</span>
+    <span class="tag tag-green">✓ No ingestion pipeline</span>
+  </div>
+  <div style="margin-top:0.55em; font-size:clamp(0.6rem,0.95vw,0.72rem); color:var(--dim)">
+    <sup style="color:var(--orange)">*</sup> Co-Lo deployments require firewall rule to allow inbound TCP on sidecar port (default <strong style="color:var(--muted)">9000</strong>) from the central server IP.
+  </div>
+  <div class="three-col" style="margin-top:0.9em">
     <div class="card hot">
       <div class="card-icon">🧠</div>
       <div class="card-title">Agentic Loop</div>
@@ -534,15 +553,15 @@
     <div style="display:flex; flex-direction:column; gap:0.8em">
       <div class="card">
         <div class="card-title">📡 Fleet health at a glance</div>
-        <div class="card-body" style="margin-top:0.4em">Admin UI shows every namespace, machine, and sidecar. Status updated every 30s — <span style="color:var(--green)">alive</span> / <span style="color:var(--red)">dead</span>.</div>
+        <div class="card-body" style="margin-top:0.4em">Admin UI shows every namespace, machine, and sidecar — across <strong style="color:var(--text)">physical servers, ECS containers, and VMs</strong>. Status updated every 30s — <span style="color:var(--green)">alive</span> / <span style="color:var(--red)">dead</span>.</div>
       </div>
       <div class="card">
         <div class="card-title">💰 Token & cost visibility</div>
         <div class="card-body" style="margin-top:0.4em">Every answer shows <code>N tokens · ~$X.XXX</code>. Usage persisted per message. Full audit trail.</div>
       </div>
       <div class="card">
-        <div class="card-title">🔒 Read-only & secure</div>
-        <div class="card-body" style="margin-top:0.4em">Rust sidecar has zero write surface. Systemd hardening. Secrets never in config. Auth tokens + TLS in Phase 4.</div>
+        <div class="card-title">🔒 Read-only &amp; zero data egress</div>
+        <div class="card-body" style="margin-top:0.4em">No log caching. No vector embeddings. No ingestion pipeline. Logs searched live on each machine — data never leaves your infrastructure. Auth tokens + TLS in Phase 4.</div>
       </div>
     </div>
   </div>
@@ -554,14 +573,16 @@
   <div class="label">Built to last</div>
   <h2>Production-grade <span>tech stack</span></h2>
   <div class="three-col" style="margin-top:1em">
-    <div class="card" style="border-color:rgba(251,191,36,0.3)">
+    <div class="card" style="border-color:rgba(251,191,36,0.5); background:rgba(251,191,36,0.06); position:relative; overflow:hidden">
+      <div style="position:absolute;top:0.5em;right:0.7em;font-size:0.6rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:var(--amber);background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);border-radius:20px;padding:0.15em 0.6em">Cutting Edge</div>
       <div class="card-icon">🦀</div>
       <div class="card-title" style="color:var(--amber)">Rust Sidecar</div>
       <ul class="bullets" style="margin-top:0.6em">
-        <li><span class="dot"></span>tokio + axum 0.7</li>
-        <li><span class="dot"></span>Single static binary — zero deps on target</li>
-        <li><span class="dot"></span>~4 MB, cross-compiled for Linux musl</li>
-        <li><span class="dot"></span>Glob expansion + time-window grep</li>
+        <li><span class="dot" style="background:var(--amber)"></span>Memory-safe — no GC, no runtime, no crashes</li>
+        <li><span class="dot" style="background:var(--amber)"></span>Single static binary · ~4 MB · zero deps on target</li>
+        <li><span class="dot" style="background:var(--amber)"></span>tokio async · axum 0.7 · cross-compiled Linux musl</li>
+        <li><span class="dot" style="background:var(--amber)"></span><strong style="color:var(--text)">#1 most admired language</strong> — Stack Overflow Survey, 9 years running</li>
+        <li><span class="dot" style="background:var(--amber)"></span>Trusted by AWS, Microsoft, Google &amp; Linux kernel</li>
       </ul>
     </div>
     <div class="card hot">
@@ -612,13 +633,13 @@
       <div class="rmap-row"><span class="rmap-dot" style="background:var(--green)"></span>Markdown · charts · token tracking · feedback</div>
       <div class="rmap-row"><span class="rmap-dot" style="background:var(--green)"></span>Source attribution · anomaly detection · export</div>
       <div class="rmap-row"><span class="rmap-dot" style="background:var(--green)"></span>Integration test suite · 241 tests total</div>
+      <div class="rmap-row"><span class="rmap-dot" style="background:var(--amber)"></span><span style="color:var(--amber)">🪟 Windows sidecar support — in progress</span></div>
     </div>
     <div>
       <div style="font-size:0.75rem; color:var(--dim); font-weight:700; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:0.6em">🔜 Phase 4 — Planned</div>
       <div class="rmap-row"><span class="rmap-dot" style="background:var(--dim)"></span>Auth tokens between server ↔ sidecar</div>
       <div class="rmap-row"><span class="rmap-dot" style="background:var(--dim)"></span>TLS for all sidecar endpoints</div>
       <div class="rmap-row"><span class="rmap-dot" style="background:var(--dim)"></span>Elasticsearch integration</div>
-      <div class="rmap-row"><span class="rmap-dot" style="background:var(--dim)"></span>Windows Event Log support</div>
       <div class="rmap-row"><span class="rmap-dot" style="background:var(--dim)"></span>Playwright end-to-end test suite</div>
       <div class="rmap-row"><span class="rmap-dot" style="background:var(--dim)"></span>Role-based access control</div>
 

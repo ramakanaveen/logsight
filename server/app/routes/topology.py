@@ -12,6 +12,7 @@ from app.schemas import (
     NamespaceCreate, NamespaceUpdate, NamespaceOut,
     MachineCreate, MachineUpdate, MachineOut,
     SidecarInstanceOut, SidecarRegisterRequest, SidecarRegisterResponse,
+    SidecarHeartbeatRequest,
     MachineProcessCreate, MachineProcessOut,
     ProcessInTopology, MachineInTopology, NamespaceTopology,
 )
@@ -188,12 +189,15 @@ async def register_sidecar(body: SidecarRegisterRequest, db: AsyncSession = Depe
         sidecar.port = body.port
         sidecar.status = "alive"
         sidecar.last_heartbeat = now
+        if body.version is not None:
+            sidecar.version = body.version
     else:
         sidecar = SidecarInstance(
             id=uuid.uuid4(),
             machine_id=machine.id,
             port=body.port,
             status="alive",
+            version=body.version,
             last_heartbeat=now,
             registered_at=now,
         )
@@ -205,12 +209,18 @@ async def register_sidecar(body: SidecarRegisterRequest, db: AsyncSession = Depe
 
 
 @router.post("/v1/sidecars/{sidecar_id}/heartbeat", status_code=204)
-async def sidecar_heartbeat(sidecar_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def sidecar_heartbeat(
+    sidecar_id: uuid.UUID,
+    body: SidecarHeartbeatRequest | None = None,
+    db: AsyncSession = Depends(get_db),
+):
     sidecar = await db.get(SidecarInstance, sidecar_id)
     if not sidecar:
         raise HTTPException(status_code=404, detail="Sidecar not found")
     sidecar.last_heartbeat = datetime.now(timezone.utc).replace(tzinfo=None)
     sidecar.status = "alive"
+    if body and body.version is not None:
+        sidecar.version = body.version
     await db.commit()
 
 

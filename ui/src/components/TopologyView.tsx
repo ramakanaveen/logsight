@@ -175,6 +175,10 @@ function MachineRow({
           <span className="font-medium text-gray-900 dark:text-gray-100">{m.machine.hostname}</span>
           <StatusBadge status={m.sidecar?.status} />
           {m.sidecar && <span className="text-xs text-gray-400">:{m.sidecar.port}</span>}
+          {m.sidecar?.version
+            ? <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400">v{m.sidecar.version}</span>
+            : m.sidecar && <span className="text-xs text-gray-400">v?</span>
+          }
           <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
               onClick={() => setShowAssign(true)}

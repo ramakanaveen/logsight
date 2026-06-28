@@ -19,47 +19,53 @@ export function ConversationSidebar({
   onExport,
 }: Props) {
   return (
-    <aside className="w-56 flex-shrink-0 border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 flex flex-col">
-      <div className="p-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+    <aside className="w-60 flex-shrink-0 border-r border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900/50 flex flex-col">
+      <div className="p-3 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500">
           History
         </span>
         <div className="flex items-center gap-1">
           {onExport && activeId && (
             <button
               onClick={onExport}
-              className="rounded p-1 hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
+              className="rounded-md p-1.5 text-stone-400 hover:text-stone-700 dark:hover:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
               title="Export conversation"
             >
-              <Download size={14} />
+              <Download size={13} />
             </button>
           )}
           <button
             onClick={onNew}
-            className="rounded p-1 hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
+            className="rounded-md p-1.5 text-stone-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-colors"
             title="New conversation"
           >
-            <Plus size={14} />
+            <Plus size={13} />
           </button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto py-1">
+      <div className="flex-1 overflow-auto py-1.5">
         {conversations.length === 0 && (
-          <p className="px-3 py-6 text-center text-xs text-gray-400 dark:text-gray-600">
-            No conversations yet
-          </p>
+          <div className="px-4 py-8 text-center">
+            <MessageSquare size={20} className="mx-auto mb-2 text-stone-300 dark:text-stone-700" />
+            <p className="text-xs text-stone-400 dark:text-stone-600">No conversations yet</p>
+          </div>
         )}
         {conversations.map((c) => (
           <div
             key={c.id}
-            className={`group flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 ${
-              c.id === activeId ? 'bg-blue-50 dark:bg-blue-950/30' : ''
+            className={`group flex items-center gap-2 px-3 py-2 mx-1.5 rounded-lg cursor-pointer transition-colors ${
+              c.id === activeId
+                ? 'bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400'
+                : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-stone-200'
             }`}
             onClick={() => onSelect(c.id)}
           >
-            <MessageSquare size={13} className="flex-shrink-0 text-gray-400" />
-            <span className="flex-1 truncate text-xs text-gray-700 dark:text-gray-300">
+            <MessageSquare
+              size={13}
+              className={`flex-shrink-0 ${c.id === activeId ? 'text-orange-500' : 'text-stone-400'}`}
+            />
+            <span className="flex-1 truncate text-xs font-medium">
               {c.title || 'Untitled'}
             </span>
             <button
@@ -67,7 +73,7 @@ export function ConversationSidebar({
                 e.stopPropagation()
                 onDelete(c.id)
               }}
-              className="hidden group-hover:flex rounded p-0.5 hover:text-red-500 text-gray-400"
+              className="hidden group-hover:flex rounded p-0.5 text-stone-400 hover:text-red-500 transition-colors"
               title="Delete"
             >
               <Trash2 size={11} />

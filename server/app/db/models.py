@@ -87,6 +87,7 @@ class SidecarInstance(Base):
     machine_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("machines.id", ondelete="CASCADE"), nullable=False, unique=True)
     port: Mapped[int] = mapped_column(Integer, default=9000)
     status: Mapped[str] = mapped_column(String, default="alive")  # alive | dead
+    version: Mapped[str | None] = mapped_column(String, nullable=True)
     last_heartbeat: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=func.now())
     registered_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=func.now())
 

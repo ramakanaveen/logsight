@@ -29,6 +29,6 @@ describe('ToolCallTrace', () => {
   it('shows result for resolved tool calls', () => {
     render(<ToolCallTrace toolCalls={makeCalls()} />)
     fireEvent.click(screen.getByText('Tool calls (2)'))
-    expect(screen.getByText('Result:')).toBeInTheDocument()
+    expect(screen.getByText('Result')).toBeInTheDocument()
   })
 })

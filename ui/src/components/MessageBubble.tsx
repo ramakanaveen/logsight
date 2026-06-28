@@ -16,25 +16,16 @@ interface Props {
 }
 
 function downloadTurn(turn: ChatTurn) {
-  const lines: string[] = [
-    '# LogSight Analysis',
-    '',
-    `**Question:** ${turn.question}`,
-    '',
-  ]
+  const lines: string[] = ['# LogSight Analysis', '', `**Question:** ${turn.question}`, '']
   if (turn.thinkingText) {
     lines.push('<details><summary>Thinking</summary>', '', turn.thinkingText, '', '</details>', '')
   }
-  if (turn.answerText) {
-    lines.push(turn.answerText, '')
-  }
+  if (turn.answerText) lines.push(turn.answerText, '')
   if (turn.sources.length > 0) {
     lines.push('## Sources', '')
     for (const s of turn.sources) {
       lines.push(`- **${s.process}** on \`${s.machine}\`: ${s.lines_matched} lines matched`)
-      for (const f of s.matched_files ?? []) {
-        lines.push(`  - \`${f}\``)
-      }
+      for (const f of s.matched_files ?? []) lines.push(`  - \`${f}\``)
     }
   }
   const blob = new Blob([lines.join('\n')], { type: 'text/markdown' })
@@ -45,11 +36,7 @@ function downloadTurn(turn: ChatTurn) {
   URL.revokeObjectURL(a.href)
 }
 
-function FeedbackButtons({
-  onFeedback,
-}: {
-  onFeedback?: (rating: 1 | -1, comment: string) => void
-}) {
+function FeedbackButtons({ onFeedback }: { onFeedback?: (rating: 1 | -1, comment: string) => void }) {
   const [submitted, setSubmitted] = useState<1 | -1 | null>(null)
   const [showComment, setShowComment] = useState<1 | -1 | null>(null)
   const [comment, setComment] = useState('')
@@ -65,32 +52,40 @@ function FeedbackButtons({
 
   if (submitted !== null) {
     return (
-      <span className="text-xs text-gray-400 dark:text-gray-500">
-        {submitted === 1 ? '👍' : '👎'} Thanks for the feedback
+      <span className="text-xs text-stone-400 dark:text-stone-500">
+        {submitted === 1 ? '👍' : '👎'} Thanks!
       </span>
     )
   }
 
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-0.5">
         <button
           onClick={() => setShowComment(showComment === 1 ? null : 1)}
-          className={`p-1 rounded hover:text-green-600 transition-colors ${showComment === 1 ? 'text-green-600' : 'text-gray-400'}`}
+          className={`p-1 rounded-md transition-colors ${
+            showComment === 1
+              ? 'text-green-500 bg-green-50 dark:bg-green-950/30'
+              : 'text-stone-400 hover:text-green-500 hover:bg-green-50 dark:hover:bg-green-950/20'
+          }`}
           title="Helpful"
         >
-          <ThumbsUp size={13} />
+          <ThumbsUp size={12} />
         </button>
         <button
           onClick={() => setShowComment(showComment === -1 ? null : -1)}
-          className={`p-1 rounded hover:text-red-500 transition-colors ${showComment === -1 ? 'text-red-500' : 'text-gray-400'}`}
+          className={`p-1 rounded-md transition-colors ${
+            showComment === -1
+              ? 'text-red-500 bg-red-50 dark:bg-red-950/30'
+              : 'text-stone-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20'
+          }`}
           title="Not helpful"
         >
-          <ThumbsDown size={13} />
+          <ThumbsDown size={12} />
         </button>
       </div>
       {showComment !== null && (
-        <div className="flex gap-1">
+        <div className="flex gap-1.5">
           <input
             autoFocus
             type="text"
@@ -98,11 +93,11 @@ function FeedbackButtons({
             onChange={(e) => setComment(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && submit(showComment)}
             placeholder="Optional comment…"
-            className="flex-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 py-0.5 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-400"
+            className="flex-1 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 px-2 py-0.5 text-xs text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
           />
           <button
             onClick={() => submit(showComment)}
-            className="rounded bg-blue-600 px-2 py-0.5 text-xs text-white hover:bg-blue-700"
+            className="rounded-lg bg-orange-500 hover:bg-orange-600 px-2.5 py-0.5 text-xs text-white transition-colors"
           >
             Send
           </button>
@@ -117,53 +112,57 @@ export function MessageBubble({ turn, onClarify, onFeedback }: Props) {
   const hasAnswer = Boolean(turn.answerText)
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {/* User message */}
       <div className="flex justify-end">
-        <div className="max-w-[75%] rounded-2xl rounded-tr-sm bg-blue-600 px-4 py-2 text-sm text-white">
+        <div className="max-w-[72%] rounded-2xl rounded-tr-sm bg-gradient-to-br from-orange-500 to-orange-600 px-4 py-2.5 text-sm text-white shadow-sm shadow-orange-200 dark:shadow-orange-900/30">
           {turn.question}
         </div>
       </div>
 
       {/* Assistant response */}
       <div className="flex justify-start">
-        <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-gray-100 dark:bg-gray-800 px-4 py-2 text-sm text-gray-900 dark:text-gray-100">
+        <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-sm px-4 py-3 text-sm text-stone-900 dark:text-stone-100">
+
           {turn.thinkingText && <ThinkingBlock text={turn.thinkingText} />}
           {turn.toolCalls.length > 0 && <ToolCallTrace toolCalls={turn.toolCalls} />}
 
+          {/* Loading dots */}
           {turn.loading && !turn.answerText && !turn.clarifyQuestion && !turn.error && (
-            <div className="flex items-center gap-2 text-gray-400 dark:text-gray-500">
-              <span className="animate-pulse">●</span>
-              <span className="animate-pulse delay-100">●</span>
-              <span className="animate-pulse delay-200">●</span>
+            <div className="flex items-center gap-1 py-1">
+              <span className="w-2 h-2 rounded-full bg-orange-400 dot-1" />
+              <span className="w-2 h-2 rounded-full bg-orange-400 dot-2" />
+              <span className="w-2 h-2 rounded-full bg-orange-400 dot-3" />
             </div>
           )}
 
           {turn.answerText && (
-            <div className="prose prose-sm dark:prose-invert max-w-none leading-relaxed">
+            <div className="prose prose-sm dark:prose-invert max-w-none leading-relaxed prose-stone">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{
                   table: ({ children }) => (
-                    <table className="text-xs border-collapse w-full my-2">{children}</table>
+                    <div className="overflow-x-auto my-3">
+                      <table className="text-xs border-collapse w-full">{children}</table>
+                    </div>
                   ),
                   th: ({ children }) => (
-                    <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 bg-gray-50 dark:bg-gray-700 text-left font-medium">
+                    <th className="border border-stone-200 dark:border-stone-700 px-2.5 py-1.5 bg-stone-50 dark:bg-stone-800 text-left font-semibold text-stone-700 dark:text-stone-300 text-xs">
                       {children}
                     </th>
                   ),
                   td: ({ children }) => (
-                    <td className="border border-gray-300 dark:border-gray-600 px-2 py-1">
+                    <td className="border border-stone-200 dark:border-stone-700 px-2.5 py-1.5 text-stone-600 dark:text-stone-400 text-xs">
                       {children}
                     </td>
                   ),
                   code: ({ children }) => (
-                    <code className="bg-gray-200 dark:bg-gray-700 rounded px-1 font-mono text-xs">
+                    <code className="bg-stone-100 dark:bg-stone-800 text-orange-600 dark:text-orange-400 rounded px-1 font-mono text-xs">
                       {children}
                     </code>
                   ),
                   pre: ({ children }) => (
-                    <pre className="bg-gray-200 dark:bg-gray-700 rounded p-3 overflow-x-auto my-2 text-xs">
+                    <pre className="bg-stone-100 dark:bg-stone-800 rounded-xl p-3 overflow-x-auto my-2 text-xs border border-stone-200 dark:border-stone-700">
                       {children}
                     </pre>
                   ),
@@ -185,22 +184,20 @@ export function MessageBubble({ turn, onClarify, onFeedback }: Props) {
           )}
 
           {turn.error && (
-            <p className="text-red-500 dark:text-red-400">{turn.error}</p>
+            <p className="text-red-500 dark:text-red-400 text-xs">{turn.error}</p>
           )}
 
           <SourceChips sources={turn.sources} />
 
-          {/* Footer: usage pill + download + feedback */}
+          {/* Footer */}
           {(hasAnswer || turn.usage) && (
-            <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-stone-100 dark:border-stone-800">
               <div className="flex items-center gap-2">
                 {turn.usage && (
-                  <span className="text-xs text-gray-400 dark:text-gray-500">
-                    {toolCallCount > 0 && `${toolCallCount} tool call${toolCallCount !== 1 ? 's' : ''} · `}
-                    {turn.usage.total_tokens.toLocaleString()} tokens
-                    {' · '}~${turn.usage.cost_usd < 0.001
-                      ? '<$0.001'
-                      : `$${turn.usage.cost_usd.toFixed(3)}`}
+                  <span className="text-xs text-stone-400 dark:text-stone-500 tabular-nums">
+                    {toolCallCount > 0 && `${toolCallCount} call${toolCallCount !== 1 ? 's' : ''} · `}
+                    {turn.usage.total_tokens.toLocaleString()} tokens · ~
+                    {turn.usage.cost_usd < 0.001 ? '<$0.001' : `$${turn.usage.cost_usd.toFixed(3)}`}
                   </span>
                 )}
               </div>
@@ -209,10 +206,10 @@ export function MessageBubble({ turn, onClarify, onFeedback }: Props) {
                 {hasAnswer && (
                   <button
                     onClick={() => downloadTurn(turn)}
-                    className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                    title="Download analysis as Markdown"
+                    className="p-1 rounded-md text-stone-400 hover:text-stone-600 dark:hover:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+                    title="Download as Markdown"
                   >
-                    <Download size={13} />
+                    <Download size={12} />
                   </button>
                 )}
               </div>

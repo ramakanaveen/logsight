@@ -27,6 +27,7 @@ export interface SidecarInstance {
   machine_id: string
   port: number
   status: 'alive' | 'dead'
+  version: string | null
   last_heartbeat: string
   registered_at: string
 }

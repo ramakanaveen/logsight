@@ -66,3 +66,21 @@ export const useChatStore = create<ChatState>((set) => ({
 
   reset: () => set({ conversationId: null, turns: [] }),
 }))
+
+// ── Theme ────────────────────────────────────────────────────────────────────
+
+interface ThemeState {
+  theme: 'dark' | 'light'
+  toggleTheme: () => void
+}
+
+export const useThemeStore = create<ThemeState>((set) => ({
+  theme: (localStorage.getItem('logsight-theme') as 'dark' | 'light') ?? 'dark',
+  toggleTheme: () =>
+    set((s) => {
+      const next = s.theme === 'dark' ? 'light' : 'dark'
+      localStorage.setItem('logsight-theme', next)
+      document.documentElement.classList.toggle('dark', next === 'dark')
+      return { theme: next }
+    }),
+}))

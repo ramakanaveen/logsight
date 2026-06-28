@@ -83,6 +83,7 @@ class SidecarInstanceOut(BaseModel):
     machine_id: uuid.UUID
     port: int
     status: str
+    version: str | None = None
     last_heartbeat: datetime
     registered_at: datetime
 
@@ -92,6 +93,11 @@ class SidecarInstanceOut(BaseModel):
 class SidecarRegisterRequest(BaseModel):
     machine_host: str
     port: int = 9000
+    version: str | None = None
+
+
+class SidecarHeartbeatRequest(BaseModel):
+    version: str | None = None
 
 
 class SidecarRegisterResponse(BaseModel):
