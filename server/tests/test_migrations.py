@@ -40,18 +40,20 @@ def test_upgrade_creates_all_tables(sqlite_db):
     assert "machine_processes" in tables
     assert "conversations" in tables
     assert "messages" in tables
+    assert "feedback" in tables
     engine.dispose()
 
 
 def test_downgrade_reverts_conversations(sqlite_db):
     run_alembic("upgrade", sqlite_db)
-    run_alembic("downgrade:-1", sqlite_db)  # rolls back 002_conversations
+    run_alembic("downgrade:001", sqlite_db)  # rolls back to revision 001 (removes 002+ including conversations)
 
     engine = create_engine(sqlite_db)
     inspector = inspect(engine)
     tables = inspector.get_table_names()
     assert "conversations" not in tables
     assert "messages" not in tables
+    assert "feedback" not in tables
     # Phase 1 tables remain
     assert "namespaces" in tables
     engine.dispose()

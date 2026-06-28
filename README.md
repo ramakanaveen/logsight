@@ -1,19 +1,44 @@
 # LogSight
 
-Distributed log intelligence for trading firms. Instead of SSHing into machines to grep logs manually, traders ask plain-English questions through a chat interface. An LLM agent fans out queries to lightweight sidecars running on each machine, collects log snippets, and returns a plain-English summary.
+Distributed log intelligence for trading firms. Instead of SSHing into machines to grep logs manually, traders ask plain-English questions through a chat interface. A Claude agentic loop fans out queries to lightweight sidecars running on each machine, collects log snippets, and streams a plain-English summary back in real time.
 
 ```
 Trader: "Is curve building complete for today?"
-→ Agent identifies CurveBuilder processes
-→ Queries sidecars on server1, server2 in parallel
-→ Claude summarizes: "Curve building completed at 14:23 on server1, still running on server2"
+→ Agent lists alive sidecars → searches CurveBuilder logs in parallel
+→ Claude streams: "Curve building completed at 14:23 on server1, still running on server2"
 ```
 
 ---
 
-## Quick start (local — no Docker)
+## Architecture (Phase 2)
 
-Prerequisites: Rust, [uv](https://docs.astral.sh/uv/), PostgreSQL running locally.
+```
+[React UI — ui/  :5173 (dev)]
+   /chat  — trader SSE streaming chat
+   /admin — fleet topology + process definitions
+          |
+          ▼ (proxied to :8080 in dev)
+[Server — server/  Python FastAPI :8080]
+   - Claude agentic loop (tool-use + extended thinking)
+   - Conversation persistence (PostgreSQL)
+   - Fleet topology: Namespace → Machine → SidecarInstance
+   - Process definitions + MachineProcess log-path registry
+   - Alembic migrations
+          |
+       ┌──┴──────────┐
+       ▼             ▼
+  [Sidecar      [Sidecar      (one per machine, self-registers + heartbeat)
+   machine-1]    machine-2]
+   port 9000     port 9000
+       |             |
+  /opt/logs/*.log  /var/log/...
+```
+
+---
+
+## Quick start (local)
+
+Prerequisites: Rust, [uv](https://docs.astral.sh/uv/), Node 18+, PostgreSQL running locally.
 
 ```bash
 git clone <repo-url> && cd logsight
@@ -25,41 +50,42 @@ cd sidecar && cargo build --release && cd ..
 psql -U postgres -c "CREATE USER logsight WITH PASSWORD 'logsight';"
 psql -U postgres -c "CREATE DATABASE logsight OWNER logsight;"
 
-# 3. Configure and install agent dependencies
-cd agent
+# 3. Configure and install server dependencies
+cd server
 cp .env.example .env
-# Edit .env — set LOGSIGHT_ANTHROPIC_API_KEY and adjust DATABASE_URL if needed
+# Edit .env — set LOGSIGHT_DB_PASSWORD and LOGSIGHT_ANTHROPIC_API_KEY
 uv sync
+LOGSIGHT_ENV=dev uv run alembic upgrade head
 
-# 4. Start both services (each in its own terminal)
-../sidecar/target/release/logsight-sidecar --port 9000
-uv run uvicorn main:app --host 0.0.0.0 --port 8080 --reload
+# 4. Start the server (terminal 1)
+LOGSIGHT_ENV=dev uv run uvicorn main:app --host 0.0.0.0 --port 8080 --reload
 
-# 5. Verify
+# 5. Start the UI (terminal 2)
+cd ui && npm install && npm run dev
+
+# 6. Start a sidecar on this machine (terminal 3)
+./sidecar/target/release/logsight-sidecar \
+  --port 9000 \
+  --agent-url http://localhost:8080 \
+  --machine-host localhost
+
+# 7. Verify
 curl http://localhost:9000/health
 curl http://localhost:8080/v1/health
 ```
 
 Open in browser:
-- Trader chat: http://localhost:8080/ui/chat/
-- Admin panel: http://localhost:8080/ui/admin/
+- Trader chat: http://localhost:5173/chat
+- Admin panel: http://localhost:5173/admin
 
 ## Quick start (Docker Compose)
 
 ```bash
-# Clone and enter the repo
-git clone <repo-url> && cd logsight
-
-# Set your Anthropic API key
 export LOGSIGHT_ANTHROPIC_API_KEY=sk-ant-...
-
-# Start agent + postgres
 cd deploy && docker-compose up -d
-
-# Open in browser
-open http://localhost:8080/ui/chat/   # Trader chat
-open http://localhost:8080/ui/admin/  # Register processes
 ```
+
+Open: http://localhost:5173/chat
 
 ---
 
@@ -67,32 +93,10 @@ open http://localhost:8080/ui/admin/  # Register processes
 
 | Component | Language | Location | Documentation |
 |-----------|----------|----------|---------------|
+| **Server** | Python + FastAPI | `server/` | [`server/README.md`](server/README.md) |
+| **React UI** | TypeScript + Vite | `ui/` | [`ui/README.md`](ui/README.md) |
 | **Sidecar** | Rust | `sidecar/` | [`sidecar/README.md`](sidecar/README.md) |
-| **Agent** | Python + FastAPI | `agent/` | [`agent/README.md`](agent/README.md) |
-| **UIs** | Vanilla HTML/JS | `agent/ui/` | [`agent/ui/README.md`](agent/ui/README.md) |
 | **Deploy** | Docker / systemd | `deploy/` | [`deploy/README.md`](deploy/README.md) |
-
----
-
-## Architecture
-
-```
-[Trader Chat /ui/chat]     [Admin UI /ui/admin]
-          │                        │
-          └────────────┬───────────┘
-                       ▼
-          [Central Agent — Python FastAPI :8080]
-            ① Claude: route question → which processes + keywords
-            ② Parallel fanout to sidecars (asyncio + httpx)
-            ③ Claude: synthesize log snippets → plain-English answer
-            └── PostgreSQL: process registry
-                       │
-       ┌───────────────┼───────────────┐
-       ▼               ▼               ▼
-  [Sidecar        [Sidecar        [Sidecar
-   server1:9000]   server2:9000]   host-N:9000]
-   reads *.log     reads *.log     reads *.log
-```
 
 ---
 
@@ -103,34 +107,37 @@ logsight/
 ├── CLAUDE.md                        ← project specification
 ├── README.md                        ← this file
 │
+├── server/                          ← Python FastAPI central server
+│   ├── main.py
+│   ├── pyproject.toml               ← uv project manifest
+│   ├── alembic/                     ← database migrations
+│   ├── config/                      ← env-specific .ini files
+│   └── app/
+│       ├── config.py
+│       ├── schemas.py
+│       ├── db/                      ← SQLAlchemy models + engine
+│       ├── routes/                  ← chat, processes, topology, conversations
+│       └── services/                ← agent loop, fanout, llm
+│
+├── ui/                              ← React + Vite + Tailwind frontend
+│   ├── src/
+│   │   ├── pages/                   ← ChatPage, AdminPage
+│   │   ├── components/              ← MessageBubble, SourceChips, etc.
+│   │   ├── hooks/                   ← useChat
+│   │   ├── store.ts                 ← Zustand store
+│   │   └── api.ts                   ← SSE streaming + REST calls
+│   └── vite.config.ts
+│
 ├── sidecar/                         ← Rust binary (runs on every machine)
 │   ├── Cargo.toml
-│   ├── README.md
 │   └── src/
 │       ├── main.rs
 │       ├── config.rs
 │       ├── api.rs
-│       └── search.rs
-│
-├── agent/                           ← Python FastAPI (central server)
-│   ├── main.py
-│   ├── pyproject.toml               ← uv project manifest and dependencies
-│   ├── Dockerfile
-│   ├── README.md
-│   ├── ui/
-│   │   ├── README.md
-│   │   ├── chat/index.html
-│   │   └── admin/index.html
-│   └── app/
-│       ├── config.py
-│       ├── schemas.py
-│       ├── db/
-│       │   ├── database.py
-│       │   └── models.py
-│       └── routes/ + services/
+│       ├── search.rs
+│       └── registration.rs          ← self-registration + heartbeat
 │
 └── deploy/
-    ├── README.md
     ├── docker-compose.yml
     └── logsight-sidecar.service
 ```
@@ -141,29 +148,59 @@ logsight/
 
 | Layer | Technology |
 |-------|------------|
-| Sidecar | Rust · tokio · axum |
-| Agent | Python 3.11+ · FastAPI · asyncio · uv |
-| LLM | Anthropic Claude (`claude-sonnet-4-6`) |
-| Database | PostgreSQL · SQLAlchemy async · asyncpg |
-| HTTP client (fanout) | httpx |
-| UI | Vanilla HTML/CSS/JS |
+| Sidecar | Rust · tokio · axum — single static binary |
+| Server | Python 3.11+ · FastAPI · asyncio · uv |
+| LLM | Anthropic Claude (`claude-sonnet-4-6`) — tool-use + extended thinking |
+| Database | PostgreSQL · SQLAlchemy 2.0 async · asyncpg · Alembic |
+| HTTP fanout | httpx (async, 10s timeout per sidecar) |
+| React UI | TypeScript · Vite · Tailwind CSS · Zustand · React Router |
 | Deployment | systemd (Linux) · Docker Compose |
 
 ---
 
-## Development checklist (Phase 1)
+## Test commands
 
-- [x] Rust sidecar: `/health` + `/search` with glob support
-- [x] Python agent: process registry CRUD
-- [x] Claude integration: routing + summarization
-- [x] Trader chat UI
-- [x] Admin process registration UI
-- [x] Systemd unit file + Docker Compose
+```bash
+# Server (Python)
+cd server && uv run pytest tests/ -v
 
-## Planned (Phase 2)
+# Sidecar (Rust)
+cd sidecar && cargo test
 
-- [ ] Auth token between agent and sidecars
-- [ ] TLS for sidecar endpoints
-- [ ] Elasticsearch query backend (instead of raw file grep)
-- [ ] Windows Event Log support in sidecar
-- [ ] Streaming responses in chat UI
+# UI (Vitest)
+cd ui && npm test
+```
+
+---
+
+## Feature checklist
+
+### Phase 1 ✅
+- Rust sidecar: `/health` + `/search` with glob + time-window
+- Python agent: process registry CRUD
+- Two-LLM-call architecture (route → fanout → summarize)
+- Trader chat UI + Admin UI (vanilla HTML)
+- systemd unit file + Docker Compose
+
+### Phase 2 ✅
+- Sidecar self-registration + heartbeat
+- Fleet topology: Namespace → Machine → SidecarInstance → MachineProcess
+- Alembic migrations (replaces `create_all`)
+- Config split: `config/{env}.ini` + `.env` secrets
+- Agentic loop: Claude tool-use + extended thinking
+- SSE streaming chat (`POST /v1/chat/stream`)
+- Conversation persistence + multi-turn history
+- React + Vite + Tailwind UI with TypeScript
+- 125 Python tests · 28 Rust tests · 25 Vitest tests
+
+### Phase 3 (in progress)
+- Arbitrary log file search (user-specified paths)
+- Proactive shutdown/anomaly detection
+- Source file attribution (which files matched)
+- Token usage tracking + display
+- Markdown rendering in chat
+- Process chooser buttons for ambiguous queries
+- Charts (recharts bar/line/pie)
+- Downloadable analysis export
+- Feedback mechanism (👍👎)
+- Integration tests

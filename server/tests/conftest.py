@@ -114,7 +114,8 @@ def mock_agent():
     async def _fake_run_agent(*, question, process_hint, history, process_definitions, db, emit):
         await emit("thinking", {"text": "Thinking..."})
         await emit("answer", {"text": "Curve building completed at 14:23 on server1."})
-        return "Curve building completed at 14:23 on server1.", []
+        await emit("usage", {"input_tokens": 100, "output_tokens": 50, "total_tokens": 150, "cost_usd": 0.001})
+        return "Curve building completed at 14:23 on server1.", [], []
 
     with patch("app.routes.chat.run_agent", side_effect=_fake_run_agent):
         yield

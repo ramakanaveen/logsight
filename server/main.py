@@ -13,6 +13,7 @@ from app.routes.chat import router as chat_router
 from app.routes.processes import router as processes_router
 from app.routes.topology import router as topology_router
 from app.routes.conversations import router as conversations_router
+from app.routes.feedback import router as feedback_router
 
 
 async def _mark_dead_sidecars() -> None:
@@ -50,6 +51,7 @@ app.include_router(chat_router)
 app.include_router(processes_router)
 app.include_router(topology_router)
 app.include_router(conversations_router)
+app.include_router(feedback_router)
 
 
 @app.get("/v1/health")

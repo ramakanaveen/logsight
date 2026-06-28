@@ -44,12 +44,25 @@ export function useChat() {
             case 'sources':
               updateTurn(idx, { sources: event.data })
               break
+            case 'usage':
+              updateTurn(idx, { usage: event.data })
+              break
+            case 'chart':
+              updateTurn(idx, { chart: event.data })
+              break
             case 'clarify':
-              updateTurn(idx, { clarifyQuestion: event.data.question })
+              updateTurn(idx, {
+                clarifyQuestion: event.data.question,
+                clarifyOptions: event.data.options,
+              })
               break
             case 'done':
               setConversationId(event.data.conversation_id)
-              updateTurn(idx, { loading: false, conversationId: event.data.conversation_id })
+              updateTurn(idx, {
+                loading: false,
+                conversationId: event.data.conversation_id,
+                messageId: event.data.message_id,
+              })
               getConversations().then(setConversations).catch(() => {})
               break
             case 'error':

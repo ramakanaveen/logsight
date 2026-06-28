@@ -22,6 +22,8 @@ def _make_response(content: list, stop_reason: str = "end_turn"):
     r = MagicMock()
     r.content = content
     r.stop_reason = stop_reason
+    r.usage.input_tokens = 100
+    r.usage.output_tokens = 50
     return r
 
 
@@ -43,7 +45,7 @@ async def test_agent_single_turn_end_turn(db_session):
         events.append((event_type, data))
 
     with patch("app.services.agent._get_client", return_value=_make_anthropic_mock([response])):
-        answer, messages = await run_agent(
+        answer, messages, sources = await run_agent(
             question="Is curve building done?",
             process_hint=None,
             history=[],
@@ -54,6 +56,7 @@ async def test_agent_single_turn_end_turn(db_session):
 
     assert answer == "Curve building is done."
     assert any(e[0] == "answer" for e in events)
+    assert any(e[0] == "usage" for e in events)
 
 
 async def test_agent_thinking_block_emitted(db_session):
@@ -101,7 +104,7 @@ async def test_agent_tool_call_then_end_turn(db_session, machine_process, sideca
         events.append((event_type, data))
 
     with patch("app.services.agent._get_client", return_value=_make_anthropic_mock([r1, r2])):
-        answer, _ = await run_agent(
+        answer, _, _sources = await run_agent(
             question="Which sidecars are alive?",
             process_hint=None,
             history=[],
@@ -213,3 +216,151 @@ async def test_agent_multi_turn_history_included(db_session):
     assert captured_messages[0]["content"] == "First question"
     assert captured_messages[1]["content"] == "First answer"
     assert "Follow-up" in captured_messages[2]["content"]
+
+
+async def test_agent_usage_event_emitted(db_session):
+    """usage SSE event is emitted with accumulated token counts after end_turn."""
+    text_block = _make_content_block("text", text="Answer.")
+    response = _make_response([text_block], stop_reason="end_turn")
+    response.usage.input_tokens = 200
+    response.usage.output_tokens = 75
+
+    events = []
+
+    async def emit(event_type, data):
+        events.append((event_type, data))
+
+    with patch("app.services.agent._get_client", return_value=_make_anthropic_mock([response])):
+        await run_agent(
+            question="Any question",
+            process_hint=None,
+            history=[],
+            process_definitions=[],
+            db=db_session,
+            emit=emit,
+        )
+
+    usage_events = [e for e in events if e[0] == "usage"]
+    assert len(usage_events) == 1
+    u = usage_events[0][1]
+    assert u["input_tokens"] == 200
+    assert u["output_tokens"] == 75
+    assert u["total_tokens"] == 275
+    assert u["cost_usd"] > 0
+
+
+async def test_agent_ask_user_with_options(db_session):
+    """ask_user with options emits clarify event with the options list."""
+    tool_block = _make_content_block(
+        "tool_use",
+        id="t1",
+        name="ask_user",
+        input={"question": "Which process?", "options": ["CurveBuilder", "RiskEngine"]},
+    )
+    r1 = _make_response([tool_block], stop_reason="tool_use")
+
+    events = []
+
+    async def emit(event_type, data):
+        events.append((event_type, data))
+
+    with patch("app.services.agent._get_client", return_value=_make_anthropic_mock([r1])):
+        with pytest.raises(ClarifyPause):
+            await run_agent(
+                question="Check the process",
+                process_hint=None,
+                history=[],
+                process_definitions=[],
+                db=db_session,
+                emit=emit,
+            )
+
+    clarify_events = [e for e in events if e[0] == "clarify"]
+    assert len(clarify_events) == 1
+    assert clarify_events[0][1]["options"] == ["CurveBuilder", "RiskEngine"]
+
+
+async def test_agent_render_chart_emits_chart_event(db_session):
+    """render_chart tool call emits chart SSE event without calling any sidecar."""
+    chart_spec = {
+        "chart_type": "bar",
+        "title": "Errors by Hour",
+        "labels": ["10:00", "11:00", "12:00"],
+        "datasets": [{"label": "Errors", "data": [3, 7, 1]}],
+    }
+    chart_block = _make_content_block("tool_use", id="t1", name="render_chart", input=chart_spec)
+    r1 = _make_response([chart_block], stop_reason="tool_use")
+
+    text_block = _make_content_block("text", text="Chart shown above.")
+    r2 = _make_response([text_block], stop_reason="end_turn")
+
+    events = []
+
+    async def emit(event_type, data):
+        events.append((event_type, data))
+
+    with patch("app.services.agent._get_client", return_value=_make_anthropic_mock([r1, r2])):
+        answer, _, sources = await run_agent(
+            question="Show me a chart",
+            process_hint=None,
+            history=[],
+            process_definitions=[],
+            db=db_session,
+            emit=emit,
+        )
+
+    chart_events = [e for e in events if e[0] == "chart"]
+    assert len(chart_events) == 1
+    assert chart_events[0][1]["chart_type"] == "bar"
+
+
+async def test_agent_search_logs_arbitrary_log_paths(db_session, sidecar, machine):
+    """search_logs with explicit log_paths bypasses MachineProcess registry."""
+    import uuid as uuid_mod
+
+    sidecar_id = sidecar["sidecar_id"]
+
+    tool_block = _make_content_block(
+        "tool_use",
+        id="t1",
+        name="search_logs",
+        input={
+            "sidecar_id": sidecar_id,
+            "process_name": "Unknown",
+            "keywords": ["error"],
+            "log_paths": ["/var/log/custom.log"],
+        },
+    )
+    r1 = _make_response([tool_block], stop_reason="tool_use")
+    text_block = _make_content_block("text", text="Found in custom log.")
+    r2 = _make_response([text_block], stop_reason="end_turn")
+
+    events = []
+
+    async def emit(event_type, data):
+        events.append((event_type, data))
+
+    sidecar_result = {
+        "results": [{"path": "/var/log/custom.log", "matched_lines": [], "total_matched": 2, "error": None}],
+        "total_files_searched": 1,
+    }
+
+    with patch("app.services.agent._get_client", return_value=_make_anthropic_mock([r1, r2])), \
+         patch("app.services.agent.query_sidecar_raw", return_value=sidecar_result):
+        answer, _, sources = await run_agent(
+            question="Search /var/log/custom.log on server1",
+            process_hint=None,
+            history=[],
+            process_definitions=[],
+            db=db_session,
+            emit=emit,
+        )
+
+    # Should not error out with "No log paths registered" — instead should succeed
+    tool_results = [e for e in events if e[0] == "tool_result"]
+    assert len(tool_results) == 1
+    result = tool_results[0][1]["result"]
+    # The result is the raw sidecar payload (which has "error": None per file — that's OK).
+    # We just check it's not a top-level error string.
+    assert "No log paths" not in str(result)
+    assert isinstance(result, dict)

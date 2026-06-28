@@ -146,3 +146,16 @@ class Message(Base):
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=func.now())
 
     conversation: Mapped["Conversation"] = relationship("Conversation", back_populates="messages")
+
+
+# ── Feedback ──────────────────────────────────────────────────────────────────
+
+class Feedback(Base):
+    __tablename__ = "feedback"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    conversation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False)
+    message_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("messages.id", ondelete="CASCADE"), nullable=False)
+    rating: Mapped[int] = mapped_column(Integer, nullable=False)  # 1 = thumbs up, -1 = thumbs down
+    comment: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=func.now())

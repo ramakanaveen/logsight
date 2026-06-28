@@ -43,6 +43,14 @@ export const getConversations = () => req<Conversation[]>('/conversations')
 export const getConversationMessages = (id: string) => req<Message[]>(`/conversations/${id}/messages`)
 export const deleteConversation = (id: string) => fetch(BASE + `/conversations/${id}`, { method: 'DELETE' })
 
+// Feedback
+export const submitFeedback = (body: {
+  conversation_id: string
+  message_id: string
+  rating: 1 | -1
+  comment: string
+}) => req('/feedback', { method: 'POST', body: JSON.stringify(body) })
+
 // Chat streaming
 export async function* streamChat(payload: {
   question: string

@@ -77,6 +77,26 @@ export interface SourceInfo {
   machine: string
   files_searched: number
   lines_matched: number
+  matched_files: string[]
+}
+
+export interface UsageInfo {
+  input_tokens: number
+  output_tokens: number
+  total_tokens: number
+  cost_usd: number
+}
+
+export interface ChartDataset {
+  label: string
+  data: number[]
+}
+
+export interface ChartSpec {
+  chart_type: 'bar' | 'line' | 'pie'
+  title: string
+  labels: string[]
+  datasets: ChartDataset[]
 }
 
 // SSE event types emitted by POST /v1/chat/stream
@@ -84,10 +104,12 @@ export type SSEEvent =
   | { type: 'thinking'; data: { text: string } }
   | { type: 'tool_call'; data: { tool: string; input: Record<string, unknown> } }
   | { type: 'tool_result'; data: { tool: string; result: unknown } }
-  | { type: 'clarify'; data: { question: string } }
+  | { type: 'clarify'; data: { question: string; options?: string[] } }
   | { type: 'answer'; data: { text: string } }
   | { type: 'sources'; data: SourceInfo[] }
-  | { type: 'done'; data: { conversation_id: string; clarify?: boolean } }
+  | { type: 'usage'; data: UsageInfo }
+  | { type: 'chart'; data: ChartSpec }
+  | { type: 'done'; data: { conversation_id: string; message_id?: string; clarify?: boolean } }
   | { type: 'error'; data: { message: string } }
 
 export interface ChatTurn {
@@ -96,8 +118,12 @@ export interface ChatTurn {
   toolCalls: { tool: string; input: Record<string, unknown>; result?: unknown }[]
   answerText?: string
   sources: SourceInfo[]
+  usage?: UsageInfo
+  chart?: ChartSpec
   conversationId?: string
+  messageId?: string
   clarifyQuestion?: string
+  clarifyOptions?: string[]
   error?: string
   loading: boolean
 }

@@ -43,11 +43,18 @@ async def _load_history(conv: Conversation, db: AsyncSession) -> list[dict]:
 
 
 async def _save_turn(
-    conv: Conversation, question: str, answer: str, final_messages: list[dict], db: AsyncSession
-) -> None:
+    conv: Conversation,
+    question: str,
+    answer: str,
+    final_messages: list[dict],
+    db: AsyncSession,
+    usage: dict | None = None,
+) -> uuid.UUID:
+    """Save user + assistant messages and return the assistant message ID."""
     if not conv.title:
         conv.title = question[:80]
 
+    assistant_id = uuid.uuid4()
     user_msg = Message(
         id=uuid.uuid4(),
         conversation_id=conv.id,
@@ -56,16 +63,17 @@ async def _save_turn(
         metadata_={},
     )
     assistant_msg = Message(
-        id=uuid.uuid4(),
+        id=assistant_id,
         conversation_id=conv.id,
         role="assistant",
         content=answer,
-        metadata_={},
+        metadata_={"usage": usage} if usage else {},
     )
     db.add(user_msg)
     db.add(assistant_msg)
     conv.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
+    return assistant_id
 
 
 def _sse(event_type: str, data: object) -> str:
@@ -86,14 +94,18 @@ async def _stream_agent(
     history = await _load_history(conv, db)
 
     collected: list[str] = []
+    collected_usage: dict | None = None
 
     async def emit(event_type: str, data: object) -> None:
+        nonlocal collected_usage
+        if event_type == "usage":
+            collected_usage = data  # type: ignore[assignment]
         collected.append(_sse(event_type, data))
 
     events: list[str] = []
 
     try:
-        answer, final_messages = await run_agent(
+        answer, final_messages, sources = await run_agent(
             question=body.question,
             process_hint=body.process_hint,
             history=history,
@@ -102,9 +114,20 @@ async def _stream_agent(
             emit=emit,
         )
         events = collected
-        await _save_turn(conv, body.question, answer, final_messages, db)
-        events.append(_sse("sources", []))
-        events.append(_sse("done", {"conversation_id": str(conv.id)}))
+        assistant_id = await _save_turn(conv, body.question, answer, final_messages, db, usage=collected_usage)
+        # Format sources for the UI (strip internal _machine_host key)
+        ui_sources = [
+            {
+                "process": s.get("process_name", ""),
+                "machine": s.get("machine_host", ""),
+                "files_searched": s.get("files_searched", 0),
+                "lines_matched": s.get("lines_matched", 0),
+                "matched_files": s.get("matched_files", []),
+            }
+            for s in sources
+        ]
+        events.append(_sse("sources", ui_sources))
+        events.append(_sse("done", {"conversation_id": str(conv.id), "message_id": str(assistant_id)}))
     except ClarifyPause as cp:
         events = collected
         events.append(_sse("done", {"conversation_id": str(conv.id), "clarify": True}))
@@ -146,12 +169,16 @@ async def chat(body: ChatRequest, db: AsyncSession = Depends(get_db)):
     conv = await _get_or_create_conversation(body.conversation_id, db)
     history = await _load_history(conv, db)
     events: list[tuple[str, object]] = []
+    collected_usage: dict | None = None
 
     async def emit(event_type: str, data: object) -> None:
+        nonlocal collected_usage
+        if event_type == "usage":
+            collected_usage = data  # type: ignore[assignment]
         events.append((event_type, data))
 
     try:
-        answer, final_messages = await run_agent(
+        answer, final_messages, raw_sources = await run_agent(
             question=body.question,
             process_hint=body.process_hint,
             history=history,
@@ -162,18 +189,19 @@ async def chat(body: ChatRequest, db: AsyncSession = Depends(get_db)):
     except ClarifyPause as cp:
         answer = f"I need more information: {cp.question}"
         final_messages = cp.messages
+        raw_sources = []
 
-    await _save_turn(conv, body.question, answer, final_messages, db)
+    await _save_turn(conv, body.question, answer, final_messages, db, usage=collected_usage)
 
     sources = [
         SourceInfo(
-            process=e[1].get("process_name", ""),
-            machine="",
-            files_searched=e[1].get("files_searched", 0),
-            lines_matched=e[1].get("lines_matched", 0),
+            process=s.get("process_name", ""),
+            machine=s.get("machine_host", ""),
+            files_searched=s.get("files_searched", 0),
+            lines_matched=s.get("lines_matched", 0),
+            matched_files=s.get("matched_files", []),
         )
-        for e in events
-        if e[0] == "tool_result" and isinstance(e[1], dict) and "process_name" in e[1]
+        for s in raw_sources
     ]
 
     return ChatResponse(answer=answer, sources=sources, conversation_id=conv.id)

@@ -23,4 +23,36 @@ describe('ClarifyPrompt', () => {
     fireEvent.submit(screen.getByPlaceholderText('Your answer…').closest('form')!)
     expect(onReply).not.toHaveBeenCalled()
   })
+
+  it('renders option buttons when options prop is provided', () => {
+    const onReply = vi.fn()
+    render(
+      <ClarifyPrompt
+        question="Which process?"
+        options={['CurveBuilder', 'RiskEngine']}
+        onReply={onReply}
+      />,
+    )
+    expect(screen.getByText('CurveBuilder')).toBeInTheDocument()
+    expect(screen.getByText('RiskEngine')).toBeInTheDocument()
+    expect(screen.queryByPlaceholderText('Your answer…')).not.toBeInTheDocument()
+  })
+
+  it('calls onReply with option value when option button is clicked', async () => {
+    const onReply = vi.fn()
+    render(
+      <ClarifyPrompt
+        question="Which process?"
+        options={['CurveBuilder', 'RiskEngine']}
+        onReply={onReply}
+      />,
+    )
+    await userEvent.click(screen.getByText('CurveBuilder'))
+    expect(onReply).toHaveBeenCalledWith('CurveBuilder')
+  })
+
+  it('renders free-text input when options is empty array', () => {
+    render(<ClarifyPrompt question="What time?" options={[]} onReply={() => {}} />)
+    expect(screen.getByPlaceholderText('Your answer…')).toBeInTheDocument()
+  })
 })

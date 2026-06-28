@@ -60,7 +60,7 @@ TOOLS: list[dict] = [
         "name": "search_logs",
         "description": (
             "Search log files for a specific process on a machine via its sidecar. "
-            "The server resolves the log paths from the MachineProcess registry. "
+            "The server resolves the log paths from the MachineProcess registry unless you supply log_paths directly. "
             "Call multiple times with different keywords or time windows to dig deeper."
         ),
         "input_schema": {
@@ -76,6 +76,16 @@ TOOLS: list[dict] = [
                     "items": {"type": "string"},
                     "description": "Keywords to grep in log lines",
                 },
+                "log_paths": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "Optional. Explicit glob patterns to search "
+                        "(e.g. ['/var/log/app.log', '/tmp/*.log']). "
+                        "If omitted, paths are resolved from the MachineProcess registry using process_name. "
+                        "Use this when the user specifies a file path directly."
+                    ),
+                },
                 "time_window_minutes": {
                     "type": "integer",
                     "description": "How far back to look in minutes. Omit to search all available logs.",
@@ -86,16 +96,60 @@ TOOLS: list[dict] = [
         },
     },
     {
+        "name": "render_chart",
+        "description": (
+            "Render a chart in the UI. Call this after search_logs when the answer is better shown "
+            "as a visualization (frequency counts, time series, comparisons across machines). "
+            "Derive the chart data yourself from the log lines you received. "
+            "You can also call this proactively when the data is inherently comparative."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "chart_type": {
+                    "type": "string",
+                    "enum": ["bar", "line", "pie"],
+                    "description": "Chart type",
+                },
+                "title": {"type": "string", "description": "Chart title"},
+                "labels": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "X-axis labels (bar/line) or slice names (pie)",
+                },
+                "datasets": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "label": {"type": "string"},
+                            "data": {"type": "array", "items": {"type": "number"}},
+                        },
+                        "required": ["label", "data"],
+                    },
+                    "description": "One dataset per series",
+                },
+            },
+            "required": ["chart_type", "title", "labels", "datasets"],
+        },
+    },
+    {
         "name": "ask_user",
         "description": (
             "Ask the user a clarifying question when the request is ambiguous "
             "(e.g. no time range given, unclear which system). "
-            "This pauses the loop — the user's reply becomes the next turn."
+            "This pauses the loop — the user's reply becomes the next turn. "
+            "Supply options[] when the ambiguity has a known set of choices (e.g. process names)."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "question": {"type": "string"},
+                "options": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional list of choices to present as buttons (e.g. process names)",
+                },
             },
             "required": ["question"],
         },
@@ -120,7 +174,22 @@ Workflow:
 1. Call list_sidecars to find alive sidecars (filter by namespace/process if you know them).
 2. Call search_logs for each relevant sidecar+process combination.
 3. If the question is ambiguous (no time range, unclear system), call ask_user ONCE.
-4. When you have enough evidence, write a concise plain-English answer.
+   - Supply options[] when the ambiguity has a known set of choices (e.g. list process names as buttons).
+4. When you have enough evidence, write a concise plain-English answer using markdown.
+   - Use tables when comparing data across machines or processes.
+   - Use bold for key findings, times, and machine names.
+
+Arbitrary log file search:
+- If the user specifies a file path directly (e.g. "search /var/log/app.log on server1"):
+  1. Call list_sidecars(machine_host="server1") to find the sidecar.
+  2. Call search_logs with log_paths=["/var/log/app.log"] — the process_name is optional in this case.
+
+CRITICAL — proactive anomaly detection:
+- If any log line contains: shutdown / terminated / SIGTERM / SIGKILL / exit code / crashed / killed / OOM:
+  → Start your answer with "⚠️ Process appears to have shut down" and explain what the logs show.
+  → Do NOT bury this finding in a summary — call it out FIRST.
+- If a sidecar is dead (status=dead) and logs indicate a shutdown:
+  → Flag the process as "likely offline" at the top of your answer.
 
 Be specific about times, machines, and statuses when the data supports it.
 If no relevant logs were found, say so clearly.
@@ -133,6 +202,10 @@ def _build_user_content(question: str, process_hint: str | None) -> str:
     return question
 
 
+_SONNET_INPUT_PER_TOKEN = 3 / 1_000_000   # $3 per million input tokens
+_SONNET_OUTPUT_PER_TOKEN = 15 / 1_000_000  # $15 per million output tokens
+
+
 async def run_agent(
     *,
     question: str,
@@ -141,11 +214,11 @@ async def run_agent(
     process_definitions: list[dict],
     db: AsyncSession,
     emit: Callable[[str, Any], Awaitable[None]],
-) -> tuple[str, list[dict]]:
+) -> tuple[str, list[dict], list[dict]]:
     """
     Run the agentic loop.
 
-    Returns (answer_text, updated_messages_list).
+    Returns (answer_text, updated_messages_list, sources_list).
     `emit(event_type, data)` is called for every SSE event.
     Raises `ClarifyPause` with the question when ask_user is called.
     """
@@ -156,6 +229,8 @@ async def run_agent(
     system = _build_system_prompt(process_definitions)
     answer_text = ""
     sources: list[dict] = []
+    total_input = 0
+    total_output = 0
 
     while True:
         loop = asyncio.get_event_loop()
@@ -170,6 +245,9 @@ async def run_agent(
                 messages=messages,
             ),
         )
+
+        total_input += response.usage.input_tokens
+        total_output += response.usage.output_tokens
 
         # Emit thinking and answer blocks
         for block in response.content:
@@ -192,11 +270,23 @@ async def run_agent(
             await emit("tool_call", {"tool": block.name, "input": block.input})
 
             if block.name == "ask_user":
-                await emit("clarify", {"question": block.input["question"]})
+                await emit("clarify", {
+                    "question": block.input["question"],
+                    "options": block.input.get("options", []),
+                })
                 raise ClarifyPause(
                     question=block.input["question"],
                     messages=messages + [{"role": "assistant", "content": response.content}],
                 )
+
+            if block.name == "render_chart":
+                await emit("chart", block.input)
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": "Chart rendered in UI.",
+                })
+                continue
 
             result = await _execute_tool(block.name, block.input, db, sources)
             await emit("tool_result", {"tool": block.name, "result": result})
@@ -209,7 +299,18 @@ async def run_agent(
         messages.append({"role": "assistant", "content": response.content})
         messages.append({"role": "user", "content": tool_results})
 
-    return answer_text, messages
+    cost = round(
+        total_input * _SONNET_INPUT_PER_TOKEN + total_output * _SONNET_OUTPUT_PER_TOKEN,
+        5,
+    )
+    await emit("usage", {
+        "input_tokens": total_input,
+        "output_tokens": total_output,
+        "total_tokens": total_input + total_output,
+        "cost_usd": cost,
+    })
+
+    return answer_text, messages, sources
 
 
 async def _execute_tool(
@@ -222,12 +323,17 @@ async def _execute_tool(
         return await _tool_list_sidecars(input_, db)
     if name == "search_logs":
         result = await _tool_search_logs(input_, db)
-        sources.append({
-            "sidecar_id": input_["sidecar_id"],
-            "process_name": input_["process_name"],
-            "lines_matched": sum(r.get("total_matched", 0) for r in result.get("results", [])),
-            "files_searched": result.get("total_files_searched", 0),
-        })
+        if "error" not in result:
+            sources.append({
+                "sidecar_id": input_["sidecar_id"],
+                "process_name": input_["process_name"],
+                "machine_host": result.get("_machine_host", ""),
+                "lines_matched": sum(r.get("total_matched", 0) for r in result.get("results", [])),
+                "files_searched": result.get("total_files_searched", 0),
+                "matched_files": [
+                    r["path"] for r in result.get("results", []) if r.get("total_matched", 0) > 0
+                ],
+            })
         return result
     return {"error": f"Unknown tool: {name}"}
 
@@ -298,16 +404,23 @@ async def _tool_search_logs(input_: dict, db: AsyncSession) -> dict:
     if sidecar.status == "dead":
         return {"error": f"Sidecar on {sidecar.machine.hostname} is dead (last heartbeat: {sidecar.last_heartbeat})"}
 
-    # Resolve log paths from MachineProcess
     process_name = input_["process_name"]
-    log_paths: list[str] = []
-    for mp in sidecar.machine.machine_processes:
-        if mp.process_definition.name.lower() == process_name.lower():
-            log_paths = mp.log_paths
-            break
+
+    # Use caller-supplied paths if provided; otherwise resolve from MachineProcess registry
+    log_paths: list[str] = input_.get("log_paths") or []
+    if not log_paths:
+        for mp in sidecar.machine.machine_processes:
+            if mp.process_definition.name.lower() == process_name.lower():
+                log_paths = mp.log_paths
+                break
 
     if not log_paths:
-        return {"error": f"No log paths registered for process {process_name!r} on {sidecar.machine.hostname}"}
+        return {
+            "error": (
+                f"No log paths registered for process {process_name!r} on {sidecar.machine.hostname}. "
+                "Provide log_paths explicitly or register the process in Admin."
+            )
+        }
 
     payload: dict[str, Any] = {
         "keywords": input_["keywords"],
@@ -317,7 +430,10 @@ async def _tool_search_logs(input_: dict, db: AsyncSession) -> dict:
     if "time_window_minutes" in input_:
         payload["time_window_minutes"] = input_["time_window_minutes"]
 
-    return await query_sidecar_raw(sidecar.machine.hostname, sidecar.port, payload)
+    result = await query_sidecar_raw(sidecar.machine.hostname, sidecar.port, payload)
+    if isinstance(result, dict) and "error" not in result:
+        result["_machine_host"] = sidecar.machine.hostname
+    return result
 
 
 class ClarifyPause(Exception):

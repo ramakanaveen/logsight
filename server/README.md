@@ -1,52 +1,129 @@
-# LogSight Agent
+# LogSight Server
 
-The central Python server. Traders send plain-English questions to it; it uses Claude to identify which registered processes are relevant, fans out log searches to sidecars on the appropriate machines in parallel, then uses Claude again to synthesize the results into a plain-English answer.
+The central Python server. Traders send plain-English questions; a Claude agentic loop uses tool-use + extended thinking to discover alive sidecars, search the right log files in parallel, and stream a plain-English answer via Server-Sent Events.
 
 ---
 
-## Overview
+## Architecture
 
-- **Two-call LLM architecture** — one call routes the question (which processes, what keywords), a second call summarizes the raw log evidence into a readable answer.
-- **Parallel fanout** — all sidecar queries for a single chat request run concurrently via `asyncio` + `httpx`.
-- **Graceful degradation** — if a sidecar is unreachable, the agent notes it in the context sent to the summarization call and continues with whatever data it did collect.
-- **Process registry** — PostgreSQL table stores which processes exist, where their sidecars are, and example Q&A pairs that improve routing accuracy.
+### Agentic loop (one request → multiple tool calls)
+
+```
+Trader question (SSE stream)
+      │
+      ▼
+Claude (tool-use + extended thinking)
+  ├── list_sidecars(namespace?, machine_host?, process_name?)
+  │     → queries PostgreSQL SidecarInstance table
+  │     → returns alive sidecars with their registered processes
+  │
+  ├── search_logs(sidecar_id, process_name, keywords, time_window_minutes?)
+  │     → resolves log paths from MachineProcess registry
+  │     → POSTs to sidecar /search endpoint
+  │     → returns matched lines
+  │
+  └── ask_user(question, options?)
+        → emits "clarify" SSE event → pauses loop
+        → next chat turn resumes with user's reply
+      │
+      ▼
+Claude synthesizes log evidence → streams answer
+```
+
+### SSE event catalogue
+
+Each event is a `data: {...}\n\n` line with `type` and `data` fields:
+
+| Event | When | Data |
+|-------|------|------|
+| `thinking` | Claude extended thinking block | `{ text }` |
+| `tool_call` | Before each tool execution | `{ tool, input }` |
+| `tool_result` | After each tool execution | `{ tool, result }` |
+| `clarify` | `ask_user` tool called | `{ question, options? }` |
+| `answer` | Claude final text block | `{ text }` |
+| `sources` | After answer | `[{ process, machine, files_searched, lines_matched, matched_files }]` |
+| `usage` | After answer | `{ input_tokens, output_tokens, total_tokens, cost_usd }` |
+| `chart` | `render_chart` tool called | `{ chart_type, title, labels, datasets }` |
+| `done` | Stream complete | `{ conversation_id, clarify? }` |
+| `error` | Any exception | `{ message }` |
 
 ---
 
 ## Setup
 
-Requires Python 3.11+, [uv](https://docs.astral.sh/uv/), and a running PostgreSQL instance.
+Requires Python 3.11+, [uv](https://docs.astral.sh/uv/), and PostgreSQL.
 
 ```bash
-cd agent
+cd server
 
-# Install dependencies (uv creates .venv automatically)
+# Install dependencies
 uv sync
 
 # Configure
 cp .env.example .env
-# Edit .env: set LOGSIGHT_ANTHROPIC_API_KEY and LOGSIGHT_DATABASE_URL
+# Edit .env — set LOGSIGHT_DB_PASSWORD and LOGSIGHT_ANTHROPIC_API_KEY
 
-# Run (dev mode with auto-reload)
-uv run uvicorn main:app --host 0.0.0.0 --port 8080 --reload
+# Run migrations
+LOGSIGHT_ENV=dev uv run alembic upgrade head
+
+# Start (dev mode with auto-reload)
+LOGSIGHT_ENV=dev uv run uvicorn main:app --host 0.0.0.0 --port 8080 --reload
 ```
-
-On first startup the agent auto-creates the `processes` table if it does not exist.
 
 ---
 
 ## Configuration
 
-All settings are read from environment variables (or a `.env` file in the `agent/` directory).
+### `config/{env}.ini`
 
-| Variable                    | Default                                                        | Description                       |
-|-----------------------------|----------------------------------------------------------------|-----------------------------------|
-| `LOGSIGHT_DATABASE_URL`     | `postgresql+asyncpg://logsight:logsight@localhost:5432/logsight` | Async SQLAlchemy connection URL   |
-| `LOGSIGHT_ANTHROPIC_API_KEY`| —                                                              | **Required.** Anthropic API key   |
-| `LOGSIGHT_HOST`             | `0.0.0.0`                                                      | Bind address                      |
-| `LOGSIGHT_PORT`             | `8080`                                                         | Listen port                       |
+Select environment with `LOGSIGHT_ENV` (default: `dev`).
 
-The `postgresql+asyncpg://` scheme is required — the agent uses `asyncpg` for async I/O. Plain `postgresql://` (psycopg2) will not work.
+```ini
+[server]
+host = 0.0.0.0
+port = 8080
+model = claude-sonnet-4-6
+
+[database]
+host = localhost
+port = 5432
+name = logsight
+user = logsight
+```
+
+### `.env` (secrets only — gitignored)
+
+```
+LOGSIGHT_DB_PASSWORD=logsight
+LOGSIGHT_ANTHROPIC_API_KEY=sk-ant-...
+```
+
+---
+
+## Database migrations
+
+```bash
+# Apply all pending migrations
+LOGSIGHT_ENV=dev uv run alembic upgrade head
+
+# Check current revision
+LOGSIGHT_ENV=dev uv run alembic current
+
+# Create a new migration
+LOGSIGHT_ENV=dev uv run alembic revision -m "describe_change"
+
+# Rollback one step
+LOGSIGHT_ENV=dev uv run alembic downgrade -1
+```
+
+### Migration history
+
+| Revision | Description |
+|----------|-------------|
+| `001` | Initial schema (namespaces, machines, sidecar_instances, process_definitions, machine_processes) |
+| `002` | Conversations + messages tables |
+| `003` | Fix UUID columns from VARCHAR(36) to native PostgreSQL UUID |
+| `004` | Fix JSONB (example_qa, metadata) and TEXT[] (log_paths) column types |
 
 ---
 
@@ -54,309 +131,184 @@ The `postgresql+asyncpg://` scheme is required — the agent uses `asyncpg` for 
 
 Base URL: `http://<host>:8080`
 
----
+### Health
 
-### `GET /v1/health`
-
-Liveness check.
-
-**Response**
-
-```json
-{ "status": "ok", "version": "0.1.0" }
-```
+`GET /v1/health` → `{ "status": "ok", "version": "0.1.0" }`
 
 ---
 
-### `POST /v1/chat`
+### Chat
 
-Submit a plain-English question and receive a plain-English answer synthesized from live log data.
+#### `POST /v1/chat/stream`
+
+SSE streaming agentic loop. Emits events from the table above.
 
 **Request body**
-
-```json
-{ "question": "Is curve building complete for today?" }
-```
-
-| Field      | Type     | Required | Description                  |
-|------------|----------|----------|------------------------------|
-| `question` | `string` | yes      | Non-empty trader question    |
-
-**Response body**
-
 ```json
 {
-  "answer": "Curve building completed at 14:23 on server1. It is still running on server2 as of 14:31.",
-  "sources": [
-    { "process": "CurveBuilder", "machine": "server1.prod", "files_searched": 2, "lines_matched": 7 },
-    { "process": "CurveBuilder", "machine": "server2.prod", "files_searched": 2, "lines_matched": 3 }
-  ]
+  "question": "Is curve building complete for today?",
+  "conversation_id": "uuid (optional — omit to start new conversation)",
+  "process_hint": "CurveBuilder (optional — /process filter from UI)"
 }
 ```
-
-| Field                      | Type     | Description                                                         |
-|----------------------------|----------|---------------------------------------------------------------------|
-| `answer`                   | `string` | Plain-English answer synthesized by Claude.                         |
-| `sources`                  | `array`  | One entry per sidecar that was queried.                             |
-| `sources[].process`        | `string` | Process name from the registry.                                     |
-| `sources[].machine`        | `string` | Hostname of the machine that was searched.                          |
-| `sources[].files_searched` | `integer`| Number of log files examined on that machine.                       |
-| `sources[].lines_matched`  | `integer`| Total matching lines across all files on that machine.              |
-
-**Error responses**
-
-| Status | Condition                                                 |
-|--------|-----------------------------------------------------------|
-| `422`  | `question` is empty or missing                            |
-| `502`  | LLM call failed (Anthropic API error or network issue)    |
 
 **Example**
-
 ```bash
-curl -s -X POST http://localhost:8080/v1/chat \
+curl -s -N -X POST http://localhost:8080/v1/chat/stream \
   -H 'Content-Type: application/json' \
-  -d '{"question": "Any errors in the risk engine in the last hour?"}' | jq .
+  -d '{"question": "Any errors in the risk engine?"}' \
+  | grep '^data:' | jq -r '.type + ": " + (.data.text // (.data | tostring))'
 ```
 
----
+#### `POST /v1/chat`
 
-### `GET /v1/processes`
-
-List all registered processes.
-
-**Response** — array of process objects (see schema below).
-
-```bash
-curl http://localhost:8080/v1/processes | jq .
-```
-
----
-
-### `POST /v1/processes`
-
-Register a new process.
-
-**Request body**
+Non-streaming (backward compat). Returns full answer after all tool calls complete.
 
 ```json
 {
+  "answer": "Curve building completed at 14:23 on server1.",
+  "sources": [...],
+  "conversation_id": "uuid"
+}
+```
+
+---
+
+### Conversations
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/v1/conversations` | List all conversations |
+| `GET` | `/v1/conversations/{id}` | Get conversation with messages |
+| `DELETE` | `/v1/conversations/{id}` | Delete conversation |
+
+---
+
+### Process definitions
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/v1/processes` | List all process definitions |
+| `POST` | `/v1/processes` | Create process definition |
+| `PUT` | `/v1/processes/{id}` | Update process definition |
+| `DELETE` | `/v1/processes/{id}` | Delete process definition |
+
+**Process definition object**
+```json
+{
+  "id": "uuid",
   "name": "CurveBuilder",
-  "description": "Builds yield curves each morning using market data from Bloomberg",
-  "machine_host": "server1.prod",
-  "sidecar_port": 9000,
-  "log_paths": [
-    "/opt/app/logs/curve-builder.log",
-    "/opt/app/logs/curve-builder-*.log"
-  ],
+  "description": "Builds yield curves each morning using Bloomberg market data",
   "example_qa": [
-    {
-      "question": "Is curve building complete?",
-      "answer": "Look for 'Curve building completed' or 'all curves done' in the logs"
-    }
+    { "question": "Is curve building done?", "answer": "Look for 'completed' in logs" }
   ]
 }
 ```
 
-| Field          | Type       | Required | Default | Description                                                               |
-|----------------|------------|----------|---------|---------------------------------------------------------------------------|
-| `name`         | `string`   | yes      | —       | Short display name                                                        |
-| `description`  | `string`   | yes      | —       | Sentence describing what this process does; used for LLM routing          |
-| `machine_host` | `string`   | yes      | —       | Hostname or IP the sidecar is running on                                  |
-| `sidecar_port` | `integer`  | no       | `9000`  | Port the sidecar listens on                                               |
-| `log_paths`    | `string[]` | yes      | —       | One or more paths/globs. These are sent directly to the sidecar's search. |
-| `example_qa`   | `object[]` | no       | `[]`    | Q&A pairs that help the LLM recognize when to query this process          |
-
-**Response** — `201 Created` with the created process object including its assigned `id`.
-
 ---
 
-### `PUT /v1/processes/{id}`
+### Fleet topology
 
-Update an existing process. All fields are optional — only supplied fields are changed.
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/v1/topology` | Full fleet: namespaces → machines → sidecars |
+| `POST` | `/v1/topology/namespaces` | Create namespace |
+| `POST` | `/v1/topology/machines` | Create machine |
+| `POST` | `/v1/topology/heartbeat` | Sidecar self-registration + heartbeat |
+| `GET` | `/v1/topology/sidecars` | List sidecar instances |
+| `POST` | `/v1/topology/machine-processes` | Assign process + log paths to machine |
+| `DELETE` | `/v1/topology/machine-processes/{id}` | Remove machine-process assignment |
 
-```bash
-curl -X PUT http://localhost:8080/v1/processes/550e8400-e29b-41d4-a716-446655440000 \
-  -H 'Content-Type: application/json' \
-  -d '{"sidecar_port": 9001}'
-```
-
-**Response** — updated process object.
-
-| Status | Condition              |
-|--------|------------------------|
-| `404`  | Process ID not found   |
-
----
-
-### `DELETE /v1/processes/{id}`
-
-Remove a process from the registry.
-
-```bash
-curl -X DELETE http://localhost:8080/v1/processes/550e8400-e29b-41d4-a716-446655440000
-```
-
-**Response** — `204 No Content`
-
-| Status | Condition              |
-|--------|------------------------|
-| `404`  | Process ID not found   |
-
----
-
-### Process object schema
-
+**Heartbeat request** (sent by sidecar on startup and every 30s)
 ```json
 {
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "name": "CurveBuilder",
-  "description": "Builds yield curves each morning",
   "machine_host": "server1.prod",
-  "sidecar_port": 9000,
-  "log_paths": ["/opt/app/logs/curve-builder.log"],
-  "example_qa": [
-    { "question": "Is curve building complete?", "answer": "Look for 'completed' in logs" }
-  ],
-  "created_at": "2024-01-15T09:00:00",
-  "updated_at": "2024-01-15T09:00:00"
+  "port": 9000,
+  "version": "0.1.0"
 }
 ```
 
 ---
 
-## Architecture
+### Feedback
 
-### Request lifecycle — `POST /v1/chat`
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/feedback` | Submit thumbs up/down rating |
+| `GET` | `/v1/feedback` | List all feedback (admin) |
 
-```
-Trader question
-      │
-      ▼
-① identify_processes(question, all_registered_processes)
-   → Claude analyzes the question and the registry descriptions
-   → Returns: relevant_process_ids[], keywords[]
-      │
-      ▼
-② fanout_search(targets, keywords)
-   → One asyncio task per relevant process/machine pair
-   → Each task: POST http://<host>:<port>/search  (10s timeout)
-   → Unreachable sidecars: captured as error, not raised
-      │
-      ▼
-③ summarize_results(question, sidecar_results)
-   → Claude receives: question + all log snippets + unreachable notices
-   → Returns: plain-English answer
-      │
-      ▼
-ChatResponse { answer, sources[] }
-```
-
-### LLM call 1 — `identify_processes`
-
-**Input:** trader question + JSON array of all processes (id, name, description, example_qa)
-
-**Output (JSON):**
+**Feedback request**
 ```json
 {
-  "relevant_process_ids": ["uuid-a", "uuid-b"],
-  "keywords": ["curve", "building", "complete", "finished"]
+  "conversation_id": "uuid",
+  "message_id": "uuid",
+  "rating": 1,
+  "comment": "Great answer!"
 }
 ```
-
-The process descriptions and example Q&A pairs are the primary signal Claude uses to route the question. Well-written descriptions significantly improve routing accuracy.
-
-### LLM call 2 — `summarize_results`
-
-**Input:** trader question + collected log snippets formatted as:
-
-```
-[CurveBuilder @ server1.prod] /opt/app/logs/curve-builder.log (5 matches):
-  L1234: 2024-01-15 14:23:01 INFO Curve building completed
-  L1235: 2024-01-15 14:23:01 INFO All 47 curves done
-
-[CurveBuilder @ server2.prod] UNREACHABLE: Timeout connecting to server2.prod:9000
-```
-
-**Output:** plain-English answer string.
+`rating`: `1` = thumbs up, `-1` = thumbs down.
 
 ---
 
 ## Database schema
 
-```sql
-CREATE TABLE processes (
-    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name         TEXT NOT NULL,
-    description  TEXT NOT NULL,
-    machine_host TEXT NOT NULL,
-    sidecar_port INTEGER DEFAULT 9000,
-    log_paths    TEXT[] NOT NULL,
-    example_qa   JSONB DEFAULT '[]',
-    created_at   TIMESTAMP DEFAULT NOW(),
-    updated_at   TIMESTAMP DEFAULT NOW()
-);
 ```
+namespaces          (id, name, description)
+  └── machines      (id, namespace_id, hostname, description)
+        └── sidecar_instances  (id, machine_id, port, status, last_heartbeat, version)
+        └── machine_processes  (id, machine_id, process_definition_id, log_paths[])
 
-`example_qa` stores an array of `{"question": "...", "answer": "..."}` objects. These are passed verbatim to Claude during routing so it can recognize domain-specific phrasings.
+process_definitions (id, name, description, example_qa[])
 
-The schema is created automatically at startup via SQLAlchemy's `create_all` — no migration tool is required for the current single-table schema.
+conversations       (id, title, created_at, updated_at)
+  └── messages      (id, conversation_id, role, content, metadata, created_at)
+
+feedback            (id, conversation_id, message_id, rating, comment, created_at)
+```
 
 ---
 
 ## Source layout
 
 ```
-agent/
-├── main.py                    — FastAPI app, lifespan (DB init), static mounts, root redirect
-├── pyproject.toml             — uv project manifest and dependencies
-├── .env.example
-├── Dockerfile
-│
-├── app/
-│   ├── config.py              — pydantic-settings; reads LOGSIGHT_* env vars / .env
-│   ├── schemas.py             — Pydantic request/response models (ChatRequest, ProcessCreate, etc.)
-│   │
-│   ├── db/
-│   │   ├── models.py          — SQLAlchemy ORM: Process table
-│   │   └── database.py        — async engine, session factory, get_db dependency, init_db
-│   │
-│   ├── routes/
-│   │   ├── chat.py            — POST /v1/chat: orchestrates the full routing→fanout→summarize flow
-│   │   └── processes.py       — GET/POST/PUT/DELETE /v1/processes
-│   │
-│   └── services/
-│       ├── llm.py             — identify_processes() and summarize_results() using anthropic SDK
-│       └── fanout.py          — fanout_search(): parallel httpx queries to sidecars
-│
-└── ui/
-    ├── chat/index.html        — Trader chat interface (served at /ui/chat/)
-    └── admin/index.html       — Admin process registration UI (served at /ui/admin/)
+server/
+├── main.py                    ← FastAPI app, lifespan, router mounts
+├── pyproject.toml             ← uv project manifest
+├── alembic.ini                ← migration config
+├── alembic/versions/          ← migration scripts 001-005
+├── config/
+│   ├── dev.ini
+│   ├── staging.ini
+│   └── prod.ini
+└── app/
+    ├── config.py              ← pydantic-settings + configparser
+    ├── schemas.py             ← Pydantic request/response models
+    ├── db/
+    │   ├── models.py          ← SQLAlchemy ORM models
+    │   └── database.py        ← async engine, get_db, init_db
+    ├── routes/
+    │   ├── chat.py            ← SSE streaming + backward-compat endpoint
+    │   ├── processes.py       ← process definition CRUD
+    │   ├── topology.py        ← fleet topology + heartbeat
+    │   ├── conversations.py   ← conversation list/detail/delete
+    │   └── feedback.py        ← feedback CRUD
+    └── services/
+        ├── agent.py           ← agentic loop: tool definitions + execution
+        ├── fanout.py          ← async httpx sidecar queries
+        └── llm.py             ← legacy two-call LLM functions (Phase 1 compat)
 ```
 
 ---
 
-## Dependencies
-
-| Package             | Version  | Purpose                                    |
-|---------------------|----------|--------------------------------------------|
-| `fastapi`           | 0.115    | Web framework, routing, dependency injection|
-| `uvicorn[standard]` | 0.30     | ASGI server                                |
-| `sqlalchemy[asyncio]`| 2.0     | Async ORM, schema management               |
-| `asyncpg`           | 0.29     | Async PostgreSQL driver                    |
-| `httpx`             | 0.27     | Async HTTP client for sidecar fanout       |
-| `anthropic`         | 0.34     | Anthropic Python SDK                       |
-| `pydantic-settings` | 2.5      | `.env` / environment variable config       |
-
----
-
-## Running in production
+## Running tests
 
 ```bash
-# Without Docker
-uv run uvicorn main:app --host 0.0.0.0 --port 8080 --workers 4
+cd server
+uv run pytest tests/ -v
 
-# With Docker (see deploy/)
-docker-compose up -d agent
+# Single file
+uv run pytest tests/test_agent.py -v
+
+# Integration tests
+uv run pytest tests/integration/ -v
 ```
-
-For production, run behind a reverse proxy (nginx/caddy) that handles TLS. The agent itself does not terminate TLS in Phase 1.

@@ -143,6 +143,32 @@ class SourceInfo(BaseModel):
     machine: str
     files_searched: int
     lines_matched: int
+    matched_files: list[str] = []
+
+
+class UsageInfo(BaseModel):
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    cost_usd: float
+
+
+class FeedbackCreate(BaseModel):
+    conversation_id: uuid.UUID
+    message_id: uuid.UUID
+    rating: int  # 1 = thumbs up, -1 = thumbs down
+    comment: str = ""
+
+
+class FeedbackOut(BaseModel):
+    id: uuid.UUID
+    conversation_id: uuid.UUID
+    message_id: uuid.UUID
+    rating: int
+    comment: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class ChatResponse(BaseModel):
