@@ -28,6 +28,8 @@ _ini = _load_ini()
 class _Secrets(BaseSettings):
     db_password: str = "logsight"
     anthropic_api_key: str = ""
+    vertex_project_id: str = ""
+    vertex_region: str = "us-east5"
 
     model_config = {"env_prefix": "LOGSIGHT_", "env_file": ".env", "extra": "ignore"}
 
@@ -63,6 +65,9 @@ class Settings:
     )
     model: str = _ini.get("agent", "model", fallback="claude-sonnet-4-6")
     heartbeat_timeout: int = _ini.getint("agent", "heartbeat_timeout", fallback=90)
+    llm_backend: str = _ini.get("agent", "llm_backend", fallback="anthropic")  # "anthropic" | "vertex"
+    vertex_project_id: str = _secrets.vertex_project_id
+    vertex_region: str = _secrets.vertex_region
 
 
 settings = Settings()

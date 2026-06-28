@@ -25,13 +25,19 @@ from app.config import settings
 from app.db.models import SidecarInstance, Machine, MachineProcess, ProcessDefinition
 from app.services.fanout import query_sidecar_raw
 
-_anthropic: anthropic.Anthropic | None = None
+_anthropic: anthropic.Anthropic | anthropic.AnthropicVertex | None = None
 
 
-def _get_client() -> anthropic.Anthropic:
+def _get_client() -> anthropic.Anthropic | anthropic.AnthropicVertex:
     global _anthropic
     if _anthropic is None:
-        _anthropic = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        if settings.llm_backend == "vertex":
+            _anthropic = anthropic.AnthropicVertex(
+                project_id=settings.vertex_project_id,
+                region=settings.vertex_region,
+            )
+        else:
+            _anthropic = anthropic.Anthropic(api_key=settings.anthropic_api_key)
     return _anthropic
 
 
