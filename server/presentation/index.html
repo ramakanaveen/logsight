@@ -272,6 +272,24 @@
     z-index: 100;
   }
 
+  /* ── author byline ── */
+  #author {
+    position: fixed; bottom: 1.4rem; left: 2rem;
+    display: flex; align-items: center; gap: 0.5em;
+    z-index: 100;
+    pointer-events: none;
+  }
+  #author .dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--orange); flex-shrink: 0;
+  }
+  #author .name {
+    font-size: 0.68rem; font-weight: 600;
+    color: var(--dim);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
   /* ── nav arrows ── */
   #nav-prev, #nav-next {
     position: fixed; top: 50%; transform: translateY(-50%);
@@ -333,7 +351,6 @@
     <span class="tag tag-green">Distributed Fleet</span>
   </div>
   <div class="spacer"></div>
-  <p style="font-size:0.7rem; color:var(--dim)">github.com/ramakanaveen/logsight</p>
 </div>
 
 <!-- ════════════════════════════════ 2 PROBLEM -->
@@ -631,7 +648,39 @@
     <div class="metric"><span class="num">30+</span><span class="lbl">machines, one query</span></div>
     <div class="metric"><span class="num">241</span><span class="lbl">tests passing</span></div>
   </div>
-  <div style="color:var(--dim); font-size:0.75rem">github.com/ramakanaveen/logsight</div>
+</div>
+
+<!-- ════════════════════════════════ 10 FEEDBACK -->
+<div class="slide closing-slide" id="s9">
+  <div class="glow glow-orange"></div>
+  <div class="glow glow-amber"></div>
+  <div style="font-size:clamp(2.5rem,5vw,3.5rem); margin-bottom:0.5em">💬</div>
+  <div class="label" style="text-align:center">We'd love to hear from you</div>
+  <h2 style="font-size:clamp(1.8rem,4vw,3rem); text-align:center; margin-bottom:0.3em">Share your <span>feedback</span></h2>
+  <div class="divider" style="margin: 0.6em auto 1.2em"></div>
+
+  <div style="display:flex; flex-direction:column; gap:0.7em; max-width:520px; margin:0 auto 2em; width:100%">
+    <div class="card" style="display:flex; align-items:center; gap:1em; padding:0.9em 1.2em">
+      <span style="font-size:1.4em">🔍</span>
+      <span style="font-size:clamp(0.78rem,1.3vw,0.92rem); color:var(--muted)">What log questions do you ask most often?</span>
+    </div>
+    <div class="card" style="display:flex; align-items:center; gap:1em; padding:0.9em 1.2em">
+      <span style="font-size:1.4em">⚡</span>
+      <span style="font-size:clamp(0.78rem,1.3vw,0.92rem); color:var(--muted)">Which processes matter most to your team?</span>
+    </div>
+    <div class="card" style="display:flex; align-items:center; gap:1em; padding:0.9em 1.2em">
+      <span style="font-size:1.4em">🚀</span>
+      <span style="font-size:clamp(0.78rem,1.3vw,0.92rem); color:var(--muted)">What would make this a must-have on day one?</span>
+    </div>
+  </div>
+
+  <div style="display:flex; align-items:center; gap:1em; background:rgba(249,115,22,0.08); border:1px solid rgba(249,115,22,0.25); border-radius:16px; padding:1.1em 1.6em; max-width:420px; margin:0 auto">
+    <div style="width:42px; height:42px; border-radius:50%; background:var(--orange); display:flex; align-items:center; justify-content:center; font-weight:800; color:#000; font-size:1rem; flex-shrink:0">NR</div>
+    <div>
+      <div style="font-size:clamp(0.9rem,1.5vw,1.05rem); font-weight:700; color:var(--text)">Naveen Ramaka</div>
+      <div style="font-size:clamp(0.72rem,1.1vw,0.82rem); color:var(--orange); margin-top:0.15em">naveen.ramaka@gmail.com</div>
+    </div>
+  </div>
 </div>
 
 </div><!-- /deck -->
@@ -641,6 +690,7 @@
 <div id="nav-next" onclick="next()">›</div>
 <div id="progress"></div>
 <div id="counter"></div>
+<div id="author"><span class="dot"></span><span class="name">Naveen Ramaka</span></div>
 
 <script>
   const slides = document.querySelectorAll('.slide');
