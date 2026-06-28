@@ -1,0 +1,26 @@
+[project]
+name = "logsight-agent"
+version = "0.1.0"
+description = "LogSight central agent — log intelligence for trading firms"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi==0.115.0",
+    "uvicorn[standard]==0.30.6",
+    "sqlalchemy[asyncio]==2.0.35",
+    "asyncpg>=0.30.0",
+    "httpx==0.27.2",
+    "anthropic==0.34.2",
+    "pydantic-settings==2.5.2",
+    "python-multipart==0.0.12",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "anyio[trio]>=4.0",
+    "httpx>=0.27",
+    "aiosqlite>=0.20",
+    "playwright>=1.60.0",
+    "pytest-playwright>=0.8.0",
+]

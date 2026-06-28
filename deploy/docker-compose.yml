@@ -1,0 +1,46 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: logsight
+      POSTGRES_PASSWORD: logsight
+      POSTGRES_DB: logsight
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U logsight"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  agent:
+    build:
+      context: ../agent
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      LOGSIGHT_DATABASE_URL: postgresql+asyncpg://logsight:logsight@postgres:5432/logsight
+      LOGSIGHT_ANTHROPIC_API_KEY: ${LOGSIGHT_ANTHROPIC_API_KEY}
+      LOGSIGHT_HOST: 0.0.0.0
+      LOGSIGHT_PORT: 8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  sidecar-example:
+    image: alpine:3.19
+    # In production, copy the logsight-sidecar binary here and run it.
+    # This placeholder just tails /var/log so sidecar can search it.
+    command: ["sh", "-c", "echo 'Replace this with: ./logsight-sidecar --port 9000' && sleep infinity"]
+    volumes:
+      - /var/log:/var/log:ro
+    ports:
+      - "9000:9000"
+
+volumes:
+  pgdata:

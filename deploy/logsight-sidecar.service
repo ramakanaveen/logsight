@@ -1,0 +1,21 @@
+[Unit]
+Description=LogSight Sidecar
+After=network.target
+Documentation=https://github.com/your-org/logsight
+
+[Service]
+Type=simple
+User=logsight
+ExecStart=/usr/local/bin/logsight-sidecar --port 9000
+Restart=on-failure
+RestartSec=5s
+Environment=RUST_LOG=logsight=info
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/opt/app/logs /var/log
+
+[Install]
+WantedBy=multi-user.target

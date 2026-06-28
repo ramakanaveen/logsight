@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LogSight — Admin</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #0f1117;
+    color: #e2e8f0;
+    min-height: 100vh;
+  }
+
+  header {
+    padding: 16px 32px;
+    background: #1a1d27;
+    border-bottom: 1px solid #2d3148;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  header h1 { font-size: 18px; font-weight: 600; color: #7c93f5; }
+  header a { color: #64748b; font-size: 13px; text-decoration: none; }
+  header a:hover { color: #7c93f5; }
+
+  main { max-width: 1100px; margin: 0 auto; padding: 32px; }
+
+  .toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+
+  .toolbar h2 { font-size: 16px; font-weight: 600; color: #c7d3ff; }
+
+  .btn {
+    background: #7c93f5;
+    color: #0f1117;
+    border: none;
+    border-radius: 7px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .btn:hover { background: #93a8ff; }
+
+  .btn-danger {
+    background: transparent;
+    color: #f87171;
+    border: 1px solid #f87171;
+  }
+
+  .btn-danger:hover { background: #f87171; color: #0f1117; }
+
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    text-align: left;
+    padding: 10px 12px;
+    color: #64748b;
+    border-bottom: 1px solid #2d3148;
+    font-weight: 500;
+  }
+  tbody tr { border-bottom: 1px solid #1e2130; }
+  tbody tr:hover { background: #1a1d27; }
+  tbody td { padding: 12px; vertical-align: top; }
+
+  .tag {
+    display: inline-block;
+    background: #1e2130;
+    border: 1px solid #2d3148;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 11px;
+    color: #7c93f5;
+    margin: 2px 2px 2px 0;
+  }
+
+  .actions { display: flex; gap: 6px; }
+
+  /* Modal */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: #1a1d27;
+    border: 1px solid #2d3148;
+    border-radius: 12px;
+    padding: 28px;
+    width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .modal h3 { font-size: 16px; color: #c7d3ff; }
+
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 12px; color: #64748b; font-weight: 500; }
+  .field input, .field textarea {
+    background: #0f1117;
+    border: 1px solid #2d3148;
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: #e2e8f0;
+    font-size: 13px;
+    outline: none;
+    font-family: inherit;
+  }
+  .field input:focus, .field textarea:focus { border-color: #7c93f5; }
+
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .qa-list { display: flex; flex-direction: column; gap: 8px; }
+  .qa-pair {
+    background: #0f1117;
+    border: 1px solid #2d3148;
+    border-radius: 6px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    position: relative;
+  }
+
+  .qa-pair input { background: #1a1d27; }
+
+  .remove-qa {
+    position: absolute;
+    top: 8px; right: 8px;
+    background: none;
+    border: none;
+    color: #64748b;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+  }
+
+  .remove-qa:hover { color: #f87171; }
+
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+
+  .btn-secondary {
+    background: transparent;
+    color: #64748b;
+    border: 1px solid #2d3148;
+  }
+
+  .btn-secondary:hover { color: #e2e8f0; border-color: #64748b; }
+
+  #toast {
+    position: fixed;
+    bottom: 24px; right: 24px;
+    background: #1e2130;
+    border: 1px solid #2d3148;
+    border-radius: 8px;
+    padding: 12px 18px;
+    font-size: 13px;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: all 0.2s;
+    z-index: 200;
+  }
+
+  #toast.show { opacity: 1; transform: translateY(0); }
+  #toast.error { border-color: #f87171; color: #f87171; }
+  #toast.success { border-color: #4ade80; color: #4ade80; }
+</style>
+</head>
+<body>
+<header>
+  <h1>LogSight Admin</h1>
+  <a href="/ui/chat/">Trader Chat →</a>
+</header>
+
+<main>
+  <div class="toolbar">
+    <h2>Registered Processes</h2>
+    <button class="btn" onclick="openModal()">+ Add Process</button>
+  </div>
+
+  <table id="process-table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Machine</th>
+        <th>Port</th>
+        <th>Log Paths</th>
+        <th>Description</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="process-tbody">
+      <tr><td colspan="6" style="color:#64748b;text-align:center;padding:32px">Loading…</td></tr>
+    </tbody>
+  </table>
+</main>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModalOnOverlay(event)">
+  <div class="modal">
+    <h3 id="modal-title">Add Process</h3>
+
+    <div class="field">
+      <label>Name *</label>
+      <input id="f-name" placeholder="CurveBuilder">
+    </div>
+
+    <div class="field">
+      <label>Description *</label>
+      <textarea id="f-desc" rows="2" placeholder="Builds yield curves each morning"></textarea>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label>Machine Host *</label>
+        <input id="f-host" placeholder="server1.prod">
+      </div>
+      <div class="field">
+        <label>Sidecar Port</label>
+        <input id="f-port" type="number" value="9000">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Log Paths (one per line, glob OK) *</label>
+      <textarea id="f-paths" rows="3" placeholder="/opt/app/logs/*.log&#10;/var/log/curve-builder.log"></textarea>
+    </div>
+
+    <div class="field">
+      <label>Example Q&amp;A (helps the AI route questions)</label>
+      <div class="qa-list" id="qa-list"></div>
+      <button class="btn btn-sm" style="margin-top:6px;align-self:flex-start" onclick="addQAPair()">+ Add Q&A</button>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" id="modal-save-btn" onclick="saveProcess()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  let processes = [];
+  let editingId = null;
+
+  async function loadProcesses() {
+    try {
+      const res = await fetch('/v1/processes');
+      processes = await res.json();
+      renderTable();
+    } catch (e) {
+      showToast('Failed to load processes: ' + e.message, 'error');
+    }
+  }
+
+  function renderTable() {
+    const tbody = document.getElementById('process-tbody');
+    if (!processes.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="color:#64748b;text-align:center;padding:32px">No processes registered yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = processes.map(p => `
+      <tr>
+        <td><strong>${escHtml(p.name)}</strong></td>
+        <td>${escHtml(p.machine_host)}</td>
+        <td>${p.sidecar_port}</td>
+        <td>${p.log_paths.map(path => `<span class="tag">${escHtml(path)}</span>`).join('')}</td>
+        <td style="color:#64748b;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(p.description)}</td>
+        <td>
+          <div class="actions">
+            <button class="btn btn-sm" onclick="openModal('${p.id}')">Edit</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteProcess('${p.id}', '${escHtml(p.name)}')">Delete</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  function openModal(id) {
+    editingId = id || null;
+    document.getElementById('modal-title').textContent = id ? 'Edit Process' : 'Add Process';
+    document.getElementById('modal-save-btn').textContent = id ? 'Update' : 'Save';
+    document.getElementById('qa-list').innerHTML = '';
+
+    if (id) {
+      const p = processes.find(x => x.id === id);
+      if (!p) return;
+      document.getElementById('f-name').value = p.name;
+      document.getElementById('f-desc').value = p.description;
+      document.getElementById('f-host').value = p.machine_host;
+      document.getElementById('f-port').value = p.sidecar_port;
+      document.getElementById('f-paths').value = p.log_paths.join('\n');
+      (p.example_qa || []).forEach(qa => addQAPair(qa.question, qa.answer));
+    } else {
+      document.getElementById('f-name').value = '';
+      document.getElementById('f-desc').value = '';
+      document.getElementById('f-host').value = '';
+      document.getElementById('f-port').value = '9000';
+      document.getElementById('f-paths').value = '';
+    }
+
+    document.getElementById('modal-overlay').classList.add('open');
+  }
+
+  function closeModal() {
+    document.getElementById('modal-overlay').classList.remove('open');
+    editingId = null;
+  }
+
+  function closeModalOnOverlay(e) {
+    if (e.target === document.getElementById('modal-overlay')) closeModal();
+  }
+
+  function addQAPair(q = '', a = '') {
+    const list = document.getElementById('qa-list');
+    const idx = list.children.length;
+    const div = document.createElement('div');
+    div.className = 'qa-pair';
+    div.innerHTML = `
+      <button class="remove-qa" onclick="this.parentElement.remove()" title="Remove">×</button>
+      <input placeholder="Question" value="${escHtml(q)}" class="qa-q">
+      <input placeholder="Answer" value="${escHtml(a)}" class="qa-a">
+    `;
+    list.appendChild(div);
+  }
+
+  async function saveProcess() {
+    const name = document.getElementById('f-name').value.trim();
+    const description = document.getElementById('f-desc').value.trim();
+    const machine_host = document.getElementById('f-host').value.trim();
+    const sidecar_port = parseInt(document.getElementById('f-port').value) || 9000;
+    const log_paths = document.getElementById('f-paths').value.split('\n').map(s => s.trim()).filter(Boolean);
+
+    const example_qa = [...document.querySelectorAll('.qa-pair')].map(div => ({
+      question: div.querySelector('.qa-q').value.trim(),
+      answer: div.querySelector('.qa-a').value.trim(),
+    })).filter(qa => qa.question);
+
+    if (!name || !description || !machine_host || !log_paths.length) {
+      showToast('Please fill in all required fields.', 'error');
+      return;
+    }
+
+    const body = { name, description, machine_host, sidecar_port, log_paths, example_qa };
+
+    try {
+      const res = editingId
+        ? await fetch(`/v1/processes/${editingId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        : await fetch('/v1/processes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+      if (!res.ok) {
+        const err = await res.json();
+        showToast('Error: ' + (err.detail || 'Save failed'), 'error');
+        return;
+      }
+
+      const wasEditing = !!editingId;
+      closeModal();
+      await loadProcesses();
+      showToast(wasEditing ? 'Process updated.' : 'Process created.', 'success');
+    } catch (e) {
+      showToast('Network error: ' + e.message, 'error');
+    }
+  }
+
+  async function deleteProcess(id, name) {
+    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`/v1/processes/${id}`, { method: 'DELETE' });
+      if (!res.ok) { showToast('Delete failed', 'error'); return; }
+      await loadProcesses();
+      showToast('Process deleted.', 'success');
+    } catch (e) {
+      showToast('Network error: ' + e.message, 'error');
+    }
+  }
+
+  let toastTimer;
+  function showToast(msg, type = '') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = `show ${type}`;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { el.className = ''; }, 3000);
+  }
+
+  function escHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  loadProcesses();
+</script>
+</body>
+</html>
