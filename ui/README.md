@@ -1,6 +1,6 @@
 # LogSight UI
 
-React + TypeScript + Vite frontend for LogSight. Two routes: `/chat` for traders and `/admin` for fleet management.
+React + TypeScript + Vite frontend for LogSight. Two routes: `/chat` for operators and `/admin` for fleet management.
 
 ---
 
@@ -13,7 +13,7 @@ npm run dev     # starts at :5173, proxies /v1/* to :8080
 ```
 
 Open:
-- Trader chat: http://localhost:5173/chat
+- Chat: http://localhost:5173/chat
 - Admin panel: http://localhost:5173/admin
 
 Requires the LogSight server running on port 8080.
@@ -24,7 +24,7 @@ Requires the LogSight server running on port 8080.
 
 | Path | Component | Description |
 |------|-----------|-------------|
-| `/chat` | `ChatPage` | Trader SSE streaming chat with conversation sidebar |
+| `/chat` | `ChatPage` | SSE streaming chat with conversation sidebar |
 | `/admin` | `AdminPage` | Fleet topology viewer + process definition manager |
 | `/` | — | Redirects to `/chat` |
 

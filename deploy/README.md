@@ -30,7 +30,7 @@ docker-compose down
 ```
 
 Open:
-- Trader chat: http://localhost:8080/ui/chat/
+- Chat: http://localhost:8080/ui/chat/
 - Admin panel: http://localhost:8080/ui/admin/
 
 ### Services defined in `docker-compose.yml`
@@ -196,10 +196,10 @@ WantedBy=multi-user.target
 |---------------|------------------------|------|----------|
 | Agent server  | Each sidecar machine   | 9000 | TCP/HTTP |
 | Agent server  | PostgreSQL             | 5432 | TCP      |
-| Trader browser| Agent server           | 8080 | TCP/HTTP |
+| User browser| Agent server           | 8080 | TCP/HTTP |
 | Agent server  | api.anthropic.com      | 443  | TCP/HTTPS|
 
-Block direct trader-browser access to port 9000 on sidecar machines — traders should only interact with the agent.
+Block direct user-browser access to port 9000 on sidecar machines — users should only interact with the agent.
 
 ---
 

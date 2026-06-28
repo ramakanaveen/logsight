@@ -226,4 +226,4 @@ These are the tools Claude can call inside the agentic loop. They are not direct
 | `list_sidecars(process_name?, machine_host?)` | Find alive sidecars, optionally filtered by process or hostname |
 | `search_logs(sidecar_id, process_name, keywords, log_paths?, time_window_minutes?, max_lines?)` | Search log files on a specific sidecar |
 | `render_chart(chart_type, title, labels, datasets)` | Emit a chart to the UI (bar/line/pie) |
-| `ask_user(question, options?)` | Pause and ask the trader a clarifying question; optionally present buttons |
+| `ask_user(question, options?)` | Pause and ask the user a clarifying question; optionally present buttons |

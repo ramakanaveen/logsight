@@ -2,12 +2,12 @@
 
 ## System Overview
 
-LogSight is a distributed log intelligence system. Traders ask questions in plain English; an LLM agent fans out searches to lightweight Rust sidecars on each machine and returns a summarised answer.
+LogSight is a distributed log intelligence system. Engineers and operators ask questions in plain English; an LLM agent fans out searches to lightweight Rust sidecars on each machine and returns a summarised answer.
 
 ```mermaid
 graph TB
     subgraph UI["React UI  :5173"]
-        Chat["/chat — Trader chat"]
+        Chat["/chat — Operator chat"]
         Admin["/admin — Fleet management"]
     end
 
@@ -114,13 +114,13 @@ erDiagram
 
 ```mermaid
 sequenceDiagram
-    participant T as Trader
+    participant Op as Operator
     participant UI as React UI
     participant S as FastAPI Server
     participant C as Claude API
     participant SC as Sidecar(s)
 
-    T->>UI: "Is curve building complete for today?"
+    Op->>UI: "Is curve building complete for today?"
     UI->>S: POST /v1/chat/stream (SSE)
     S->>S: Load conversation history
     S->>C: messages.create(tools=[list_sidecars, search_logs, render_chart, ask_user])
@@ -144,14 +144,14 @@ sequenceDiagram
     S-->>UI: event: usage {input_tokens, output_tokens, cost_usd}
     S-->>UI: event: done {conversation_id, message_id}
     S->>S: Persist conversation + messages
-    UI->>T: Rendered markdown answer + source chips
+    UI->>Op: Rendered markdown answer + source chips
 ```
 
 ---
 
 ## SSE Event Stream
 
-When a trader sends a question, the server responds with a `text/event-stream`. Each line is a JSON object:
+When a user sends a question, the server responds with a `text/event-stream`. Each line is a JSON object:
 
 ```mermaid
 stateDiagram-v2

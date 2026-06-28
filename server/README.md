@@ -1,6 +1,6 @@
 # LogSight Server
 
-The central Python server. Traders send plain-English questions; a Claude agentic loop uses tool-use + extended thinking to discover alive sidecars, search the right log files in parallel, and stream a plain-English answer via Server-Sent Events.
+The central Python server. Engineers and operators send plain-English questions; a Claude agentic loop uses tool-use + extended thinking to discover alive sidecars, search the right log files in parallel, and stream a plain-English answer via Server-Sent Events.
 
 ---
 
@@ -9,7 +9,7 @@ The central Python server. Traders send plain-English questions; a Claude agenti
 ### Agentic loop (one request → multiple tool calls)
 
 ```
-Trader question (SSE stream)
+User question (SSE stream)
       │
       ▼
 Claude (tool-use + extended thinking)

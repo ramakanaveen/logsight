@@ -1,9 +1,9 @@
 # LogSight
 
-Distributed log intelligence for trading firms. Instead of SSHing into machines to grep logs manually, traders ask plain-English questions through a chat interface. A Claude agentic loop fans out queries to lightweight sidecars running on each machine, collects log snippets, and streams a plain-English summary back in real time.
+Distributed log intelligence for Engineering & Operations teams. Instead of SSHing into machines to grep logs manually, engineers and operators ask plain-English questions through a chat interface. A Claude agentic loop fans out queries to lightweight sidecars running on each machine, collects log snippets, and streams a plain-English summary back in real time.
 
 ```
-Trader: "Is curve building complete for today?"
+User: "Is curve building complete for today?"
 → Agent lists alive sidecars → searches CurveBuilder logs in parallel
 → Claude streams: "Curve building completed at 14:23 on server1, still running on server2"
 ```
@@ -14,7 +14,7 @@ Trader: "Is curve building complete for today?"
 
 ```
 [React UI — ui/  :5173 (dev)]
-   /chat  — trader SSE streaming chat
+   /chat  — SSE streaming chat
    /admin — fleet topology + process definitions
           |
           ▼ (proxied to :8080 in dev)
@@ -75,7 +75,7 @@ curl http://localhost:8080/v1/health
 ```
 
 Open in browser:
-- Trader chat: http://localhost:5173/chat
+- Chat: http://localhost:5173/chat
 - Admin panel: http://localhost:5173/admin
 
 ## Quick start (Docker Compose)
@@ -179,7 +179,7 @@ cd ui && npm test
 - Rust sidecar: `/health` + `/search` with glob + time-window
 - Python agent: process registry CRUD
 - Two-LLM-call architecture (route → fanout → summarize)
-- Trader chat UI + Admin UI (vanilla HTML)
+- Operator chat UI + Admin UI (vanilla HTML)
 - systemd unit file + Docker Compose
 
 ### Phase 2 ✅
